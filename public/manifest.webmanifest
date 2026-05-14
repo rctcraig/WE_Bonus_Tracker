@@ -1,0 +1,17 @@
+{
+  "name": "WE Bonus Tracker",
+  "short_name": "WE Bonus",
+  "description": "Daily adjusted production and staff bonus progress for Wichita Endodontics.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f6f2",
+  "theme_color": "#26221d",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
