@@ -4,14 +4,19 @@ import { StatusBadge } from "@/components/status-badge";
 import {
   compactDate,
   fullDate,
-  getMonthGoal,
-  getMonthPlan,
+  getMonthGoalFromData,
+  getMonthPlanFromData,
   money,
 } from "@/lib/bonus-calculations";
+import { getActiveMonth, getPracticeData } from "@/lib/data";
 
-export default function SetupPage() {
-  const goal = getMonthGoal("2026-05");
-  const plan = getMonthPlan("2026-05");
+export const dynamic = "force-dynamic";
+
+export default async function SetupPage() {
+  const data = await getPracticeData();
+  const activeMonth = getActiveMonth(data.monthlyGoals);
+  const goal = getMonthGoalFromData(data.monthlyGoals, activeMonth);
+  const plan = getMonthPlanFromData(data.monthPlans, activeMonth);
 
   if (!plan) {
     return null;
@@ -32,8 +37,10 @@ export default function SetupPage() {
       <section className="flex flex-col gap-4 border-b border-line pb-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="mb-3 flex gap-2">
-            <StatusBadge tone="neutral">May setup</StatusBadge>
-            <StatusBadge tone="good">20 dates</StatusBadge>
+            <StatusBadge tone="neutral">{goal.label} setup</StatusBadge>
+            <StatusBadge tone="good">
+              {plan.plannedProductionDates.length} dates
+            </StatusBadge>
           </div>
           <h1 className="text-3xl font-semibold text-ink sm:text-4xl">
             Monthly schedule plan

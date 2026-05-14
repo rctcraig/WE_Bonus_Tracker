@@ -1,22 +1,31 @@
 import { Lock, Trophy } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import {
-  getDriveForNineCampaign,
-  getMonthPlan,
+  getDriveForNineCampaignFromData,
+  getMonthPlanFromData,
   money,
   percent,
   summarizeDriveForNine,
   summarizeMonth,
-  summarizeQuarter,
+  summarizeQuarterFromData,
 } from "@/lib/bonus-calculations";
-import { mayProductionEntries, monthlyGoals, quarters } from "@/lib/seed-data";
+import { getPracticeData } from "@/lib/data";
 
-export default function HistoryPage() {
-  const rows = monthlyGoals.map((goal) => {
-    const entries = goal.month === "2026-05" ? mayProductionEntries : [];
-    const summary = summarizeMonth(goal, getMonthPlan(goal.month), entries);
+export const dynamic = "force-dynamic";
+
+export default async function HistoryPage() {
+  const data = await getPracticeData();
+  const rows = data.monthlyGoals.map((goal) => {
+    const entries = data.productionEntries.filter((entry) =>
+      entry.date.startsWith(goal.month),
+    );
+    const summary = summarizeMonth(
+      goal,
+      getMonthPlanFromData(data.monthPlans, goal.month),
+      entries,
+    );
     const drive = summarizeDriveForNine(
-      getDriveForNineCampaign(goal.month),
+      getDriveForNineCampaignFromData(data.driveForNineCampaigns, goal.month),
       summary,
     );
 
@@ -39,8 +48,14 @@ export default function HistoryPage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-4">
-        {quarters.map((quarter) => {
-          const summary = summarizeQuarter(quarter);
+        {data.quarters.map((quarter) => {
+          const summary = summarizeQuarterFromData(
+            quarter,
+            data.monthlyGoals,
+            data.monthPlans,
+            data.productionEntries,
+            data.bonusTiers,
+          );
 
           return (
             <div

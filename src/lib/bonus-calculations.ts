@@ -84,6 +84,44 @@ export function getDriveForNineCampaign(month: string) {
   );
 }
 
+export function getMonthGoalFromData(goals: MonthlyGoal[], month: string) {
+  const goal = goals.find((item) => item.month === month);
+
+  if (!goal) {
+    throw new Error(`Missing goal for ${month}`);
+  }
+
+  return goal;
+}
+
+export function getMonthPlanFromData(plans: MonthPlan[], month: string) {
+  return plans.find((item) => item.month === month);
+}
+
+export function getQuarterForMonthFromData(quarterList: Quarter[], month: string) {
+  const quarter = quarterList.find((item) => item.months.includes(month));
+
+  if (!quarter) {
+    throw new Error(`Missing quarter for ${month}`);
+  }
+
+  return quarter;
+}
+
+export function getDriveForNineCampaignFromData(
+  campaigns: DriveForNineCampaign[],
+  month: string,
+) {
+  return (
+    campaigns.find((item) => item.month === month) ?? {
+      month,
+      active: false,
+      qualificationPct: 115,
+      result: "not_active",
+    }
+  );
+}
+
 export function expectedForScheduleDay(day: ScheduleDay, plan: MonthPlan) {
   const average =
     day.dayType === "friday"
@@ -183,6 +221,47 @@ export function summarizeQuarter(quarter: Quarter) {
   const pct = goal > 0 ? (actual / goal) * 100 : 0;
   const tier = tierForPercent(bonusTiers, pct);
   const nextTier = nextTierForPercent(bonusTiers, pct);
+
+  return {
+    actual,
+    goal,
+    label: quarter.label,
+    months: quarter.months,
+    nextTier,
+    pct,
+    profitabilityStatus: quarter.profitabilityStatus,
+    tier,
+  };
+}
+
+export function summarizeQuarterFromData(
+  quarter: Quarter,
+  goals: MonthlyGoal[],
+  plans: MonthPlan[],
+  entries: ProductionEntry[],
+  tiers: BonusTier[],
+) {
+  const quarterGoals = quarter.months.map((month) =>
+    getMonthGoalFromData(goals, month),
+  );
+  const goal = quarterGoals.reduce((sum, item) => sum + item.s1pGoal, 0);
+  const actual = quarterGoals.reduce((sum, item) => {
+    const monthEntries = entries.filter((entry) =>
+      entry.date.startsWith(item.month),
+    );
+
+    return (
+      sum +
+      summarizeMonth(
+        item,
+        getMonthPlanFromData(plans, item.month),
+        monthEntries,
+      ).actual
+    );
+  }, 0);
+  const pct = goal > 0 ? (actual / goal) * 100 : 0;
+  const tier = tierForPercent(tiers, pct);
+  const nextTier = nextTierForPercent(tiers, pct);
 
   return {
     actual,

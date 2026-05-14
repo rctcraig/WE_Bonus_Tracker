@@ -11,21 +11,50 @@ import { ProgressBar } from "@/components/progress-bar";
 import { StatusBadge } from "@/components/status-badge";
 import { TierLadder } from "@/components/tier-ladder";
 import {
-  activeMonth,
   compactDate,
-  currentDriveForNineSummary,
-  currentMonthSummary,
-  currentQuarterSummary,
   fullDate,
-  getMonthGoal,
+  getDriveForNineCampaignFromData,
+  getMonthGoalFromData,
+  getMonthPlanFromData,
+  getQuarterForMonthFromData,
   money,
   percent,
+  summarizeDriveForNine,
+  summarizeMonth,
+  summarizeQuarterFromData,
 } from "@/lib/bonus-calculations";
-import { mayProductionEntries } from "@/lib/seed-data";
+import { getActiveMonth, getPracticeData } from "@/lib/data";
 
-export default function Home() {
-  const monthGoal = getMonthGoal(activeMonth);
-  const lastEntry = mayProductionEntries.at(-1);
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const data = await getPracticeData();
+  const activeMonth = getActiveMonth(data.monthlyGoals);
+  const monthGoal = getMonthGoalFromData(data.monthlyGoals, activeMonth);
+  const currentMonthPlan = getMonthPlanFromData(data.monthPlans, activeMonth);
+  const monthEntries = data.productionEntries.filter((entry) =>
+    entry.date.startsWith(activeMonth),
+  );
+  const currentMonthSummary = summarizeMonth(
+    monthGoal,
+    currentMonthPlan,
+    monthEntries,
+  );
+  const currentQuarterSummary = summarizeQuarterFromData(
+    getQuarterForMonthFromData(data.quarters, activeMonth),
+    data.monthlyGoals,
+    data.monthPlans,
+    data.productionEntries,
+    data.bonusTiers,
+  );
+  const currentDriveForNineSummary = summarizeDriveForNine(
+    getDriveForNineCampaignFromData(data.driveForNineCampaigns, activeMonth),
+    currentMonthSummary,
+  );
+  const nextDriveForNine = data.driveForNineCampaigns.find(
+    (campaign) => campaign.active && campaign.month > activeMonth,
+  );
+  const lastEntry = monthEntries.at(-1);
   const monthForecastVariance =
     currentMonthSummary.forecast - monthGoal.s1pGoal;
   const schedulePaceVariance =
@@ -42,7 +71,7 @@ export default function Home() {
       <section className="flex flex-col gap-4 border-b border-line pb-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="mb-3 flex flex-wrap gap-2">
-            <StatusBadge tone="neutral">May open</StatusBadge>
+            <StatusBadge tone="neutral">{monthGoal.label} open</StatusBadge>
             <StatusBadge tone="good">Q1 paid tier tracked</StatusBadge>
             <StatusBadge tone="warning">Q2 profitability pending</StatusBadge>
           </div>
@@ -51,7 +80,8 @@ export default function Home() {
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted sm:text-base">
             Adjusted production is calculated from total production minus credit
-            adjustments. May includes the doctor-out schedule change on May 19.
+            adjustments. {monthGoal.label} includes the doctor-out schedule
+            change on May 19.
           </p>
         </div>
         <div className="rounded-lg border border-line bg-panel px-4 py-3 shadow-sm">
@@ -66,7 +96,7 @@ export default function Home() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          title="May adjusted"
+          title={`${monthGoal.label} adjusted`}
           value={money(currentMonthSummary.actual)}
           detail={`${percent(currentMonthSummary.pctOfGoal)} of ${money(
             monthGoal.s1pGoal,
@@ -88,7 +118,9 @@ export default function Home() {
           value={money(currentMonthSummary.forecast)}
           detail={`${money(
             Math.abs(monthForecastVariance),
-          )} ${monthForecastVariance >= 0 ? "ahead of" : "behind"} May goal`}
+          )} ${monthForecastVariance >= 0 ? "ahead of" : "behind"} ${
+            monthGoal.label
+          } goal`}
           icon={<TrendingUp className="h-4 w-4" aria-hidden="true" />}
           tone={monthForecastVariance >= 0 ? "good" : "danger"}
         />
@@ -100,7 +132,12 @@ export default function Home() {
               ? `${money(
                   currentDriveForNineSummary.toQualify,
                 )} needed to reach 115%`
-              : "Next active campaign is June"
+              : nextDriveForNine
+                ? `Next active campaign is ${getMonthGoalFromData(
+                    data.monthlyGoals,
+                    nextDriveForNine.month,
+                  ).label}`
+                : "No upcoming campaign"
           }
           icon={<Flag className="h-4 w-4" aria-hidden="true" />}
           tone={currentDriveForNineSummary.qualified ? "good" : "neutral"}
@@ -111,7 +148,9 @@ export default function Home() {
         <div className="rounded-lg border border-line bg-panel p-5 shadow-sm">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-ink">May pace</h2>
+              <h2 className="text-lg font-semibold text-ink">
+                {monthGoal.label} pace
+              </h2>
               <p className="text-sm text-muted">
                 Official goal progress and schedule-capacity pace.
               </p>
@@ -190,7 +229,10 @@ export default function Home() {
             </p>
           </div>
           <div className="mt-5">
-            <TierLadder percentValue={currentQuarterSummary.pct} />
+            <TierLadder
+              percentValue={currentQuarterSummary.pct}
+              tiers={data.bonusTiers}
+            />
           </div>
         </div>
       </section>
@@ -199,7 +241,7 @@ export default function Home() {
         <div className="flex flex-col gap-2 border-b border-line p-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-ink">
-              Remaining May schedule
+              Remaining {monthGoal.label} schedule
             </h2>
             <p className="text-sm text-muted">
               Doctor-day counts drive the remaining production forecast.
@@ -214,8 +256,8 @@ export default function Home() {
           {currentMonthSummary.remainingSchedule.map((day) => {
             const expected =
               day.dayType === "friday"
-                ? day.doctors * 5500
-                : day.doctors * 10800;
+                ? day.doctors * (currentMonthPlan?.avgFridayDoctorDay ?? 0)
+                : day.doctors * (currentMonthPlan?.avgMthDoctorDay ?? 0);
 
             return (
               <div key={day.date} className="p-5">
@@ -258,8 +300,8 @@ export default function Home() {
               {currentMonthSummary.remainingSchedule.map((day) => {
                 const expected =
                   day.dayType === "friday"
-                    ? day.doctors * 5500
-                    : day.doctors * 10800;
+                    ? day.doctors * (currentMonthPlan?.avgFridayDoctorDay ?? 0)
+                    : day.doctors * (currentMonthPlan?.avgMthDoctorDay ?? 0);
 
                 return (
                   <tr key={day.date} className="border-t border-line">

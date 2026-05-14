@@ -1,14 +1,16 @@
 import { bonusTiers } from "@/lib/seed-data";
 import { money } from "@/lib/bonus-calculations";
+import type { BonusTier } from "@/lib/types";
 
 type TierLadderProps = {
   percentValue: number;
+  tiers?: BonusTier[];
 };
 
-export function TierLadder({ percentValue }: TierLadderProps) {
+export function TierLadder({ percentValue, tiers = bonusTiers }: TierLadderProps) {
   return (
     <div className="space-y-2">
-      {bonusTiers.map((tier) => {
+      {tiers.map((tier) => {
         const reached = percentValue >= tier.thresholdPct;
 
         return (

@@ -21,6 +21,7 @@ export type MonthlyGoal = {
   label: string;
   s1pGoal: number;
   closed: boolean;
+  profitabilityStatus?: ProfitabilityStatus;
   officialS1PActual?: number;
   historicalAdjustedActual?: number;
 };
