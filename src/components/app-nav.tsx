@@ -9,6 +9,7 @@ import {
   History,
   Settings,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -27,8 +28,15 @@ export function AppNav() {
     <header className="sticky top-0 z-20 border-b border-line bg-panel/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6 lg:px-8">
         <Link href="/" className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-ink text-sm font-semibold text-white">
-            WE
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-black shadow-sm">
+            <Image
+              src="/we-icon-192.png"
+              alt="Wichita Endodontics logo"
+              width={40}
+              height={40}
+              className="h-10 w-10 object-cover"
+              priority
+            />
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-ink">
