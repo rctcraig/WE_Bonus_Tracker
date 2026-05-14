@@ -149,22 +149,22 @@ export default async function Home() {
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-lg font-semibold text-ink">
-                {monthGoal.label} pace
+                {monthGoal.label} plan check
               </h2>
               <p className="text-sm text-muted">
-                Official goal progress and schedule-capacity pace.
+                S1P goal progress plus the internal doctor-day forecast.
               </p>
             </div>
             <StatusBadge tone={schedulePaceVariance >= 0 ? "good" : "danger"}>
               {money(Math.abs(schedulePaceVariance))}{" "}
-              {schedulePaceVariance >= 0 ? "ahead" : "behind"} plan
+              {schedulePaceVariance >= 0 ? "above" : "below"} doctor-day plan
             </StatusBadge>
           </div>
 
           <div className="mt-6 space-y-6">
             <ProgressBar
               value={currentMonthSummary.pctOfGoal}
-              label={`${monthGoal.label} S1P goal: ${percent(
+              label={`S1P monthly goal progress: ${percent(
                 currentMonthSummary.pctOfGoal,
               )}`}
             />
@@ -177,14 +177,22 @@ export default async function Home() {
                   : 0
               }
               marker={100}
-              label={`Schedule pace through ${lastEntry ? compactDate(lastEntry.date) : "latest entry"}`}
+              label={`Doctor-day plan through ${
+                lastEntry ? compactDate(lastEntry.date) : "latest entry"
+              }: ${percent(
+                currentMonthSummary.expectedThroughEntries > 0
+                  ? (currentMonthSummary.actual /
+                      currentMonthSummary.expectedThroughEntries) *
+                      100
+                  : 0,
+              )} of expected`}
             />
           </div>
 
           <dl className="mt-6 grid gap-3 sm:grid-cols-3">
             <div className="border-t border-line pt-3">
               <dt className="text-xs font-medium uppercase tracking-[0.08em] text-muted">
-                Expected entered days
+                Doctor-day expected so far
               </dt>
               <dd className="mt-1 text-lg font-semibold text-ink">
                 {money(currentMonthSummary.expectedThroughEntries)}
@@ -192,7 +200,7 @@ export default async function Home() {
             </div>
             <div className="border-t border-line pt-3">
               <dt className="text-xs font-medium uppercase tracking-[0.08em] text-muted">
-                Remaining capacity
+                Remaining expected capacity
               </dt>
               <dd className="mt-1 text-lg font-semibold text-ink">
                 {money(currentMonthSummary.remainingExpected)}
@@ -200,7 +208,7 @@ export default async function Home() {
             </div>
             <div className="border-t border-line pt-3">
               <dt className="text-xs font-medium uppercase tracking-[0.08em] text-muted">
-                Schedule change
+                Schedule change impact
               </dt>
               <dd className="mt-1 text-lg font-semibold text-danger">
                 {money(currentMonthSummary.scheduleChangeImpact)}
