@@ -30,6 +30,28 @@ export type Database = {
         };
         Relationships: [];
       };
+      profiles: {
+        Row: {
+          user_id: string;
+          practice_id: string;
+          full_name: string;
+          role: "admin" | "manager" | "doctor" | "leadership" | "staff";
+          notifications_enabled: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          practice_id: string;
+          full_name: string;
+          role?: "admin" | "manager" | "doctor" | "leadership" | "staff";
+          notifications_enabled?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["profiles"]["Insert"]>;
+        Relationships: [];
+      };
       monthly_goals: {
         Row: {
           id: string;

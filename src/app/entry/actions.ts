@@ -1,31 +1,31 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getCurrentProfile } from "@/lib/auth";
+import { canEditProduction } from "@/lib/roles";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
-import { practiceSlug } from "@/lib/data";
 import type { ProductionEntry } from "@/lib/types";
 
 export async function saveProductionEntries(entries: ProductionEntry[]) {
-  const supabase = getSupabaseAdminClient();
-  const { data: practice, error: practiceError } = await supabase
-    .from("practices")
-    .select("id")
-    .eq("slug", practiceSlug)
-    .single();
+  const currentProfile = await getCurrentProfile();
 
-  if (practiceError) {
-    return { ok: false, message: practiceError.message };
+  if (!currentProfile || !canEditProduction(currentProfile.role)) {
+    return {
+      ok: false,
+      message: "You do not have permission to save production entries.",
+    };
   }
 
-  const practiceId = (practice as { id: string }).id;
+  const supabase = getSupabaseAdminClient();
   const rows = entries
     .filter((entry) => entry.date && entry.totalProduction >= 0)
     .map((entry) => ({
-      practice_id: practiceId,
+      practice_id: currentProfile.practiceId,
       work_date: entry.date,
       total_production: entry.totalProduction,
       credit_adjustments: entry.creditAdjustments,
       note: entry.note?.trim() || null,
+      entered_by: currentProfile.userId,
     }));
 
   if (rows.length === 0) {

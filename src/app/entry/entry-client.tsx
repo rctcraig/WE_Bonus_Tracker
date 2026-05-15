@@ -12,11 +12,16 @@ type DraftEntry = ProductionEntry & {
 };
 
 type EntryClientProps = {
+  canEditProduction: boolean;
   initialEntries: ProductionEntry[];
   draftDate: string;
 };
 
-export function EntryClient({ initialEntries, draftDate }: EntryClientProps) {
+export function EntryClient({
+  canEditProduction,
+  initialEntries,
+  draftDate,
+}: EntryClientProps) {
   const [rows, setRows] = useState<DraftEntry[]>([
     ...initialEntries.map((entry) => ({ ...entry, id: entry.date })),
     {
@@ -95,25 +100,29 @@ export function EntryClient({ initialEntries, draftDate }: EntryClientProps) {
             Current adjusted total: {money(totalAdjusted)}
           </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={addRow}
-            className="flex h-10 items-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-ink shadow-sm transition hover:bg-background"
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            Row
-          </button>
-          <button
-            type="button"
-            onClick={saveRows}
-            disabled={isPending}
-            className="flex h-10 items-center gap-2 rounded-lg bg-ink px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#3a332b] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <Save className="h-4 w-4" aria-hidden="true" />
-            {isPending ? "Saving" : "Save"}
-          </button>
-        </div>
+        {canEditProduction ? (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={addRow}
+              className="flex h-10 items-center gap-2 rounded-lg border border-line bg-panel px-3 text-sm font-semibold text-ink shadow-sm transition hover:bg-background"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Row
+            </button>
+            <button
+              type="button"
+              onClick={saveRows}
+              disabled={isPending}
+              className="flex h-10 items-center gap-2 rounded-lg bg-ink px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#3a332b] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Save className="h-4 w-4" aria-hidden="true" />
+              {isPending ? "Saving" : "Save"}
+            </button>
+          </div>
+        ) : (
+          <StatusBadge tone="neutral">View only</StatusBadge>
+        )}
       </section>
 
       {status ? (
@@ -157,10 +166,11 @@ export function EntryClient({ initialEntries, draftDate }: EntryClientProps) {
                       id={`${row.id}-date`}
                       type="date"
                       value={row.date}
+                      disabled={!canEditProduction}
                       onChange={(event) =>
                         updateRow(row.id, "date", event.target.value)
                       }
-                      className="h-10 rounded-lg border border-line bg-white px-3 text-ink"
+                      className="h-10 rounded-lg border border-line bg-white px-3 text-ink disabled:bg-background disabled:text-muted"
                     />
                     <p className="mt-1 text-xs text-muted">
                       {fullDate(row.date)}
@@ -175,10 +185,11 @@ export function EntryClient({ initialEntries, draftDate }: EntryClientProps) {
                       type="number"
                       min="0"
                       value={row.totalProduction}
+                      disabled={!canEditProduction}
                       onChange={(event) =>
                         updateRow(row.id, "totalProduction", event.target.value)
                       }
-                      className="h-10 w-36 rounded-lg border border-line bg-white px-3 text-right font-mono text-ink"
+                      className="h-10 w-36 rounded-lg border border-line bg-white px-3 text-right font-mono text-ink disabled:bg-background disabled:text-muted"
                     />
                   </td>
                   <td className="px-5 py-3 text-right">
@@ -190,6 +201,7 @@ export function EntryClient({ initialEntries, draftDate }: EntryClientProps) {
                       type="number"
                       min="0"
                       value={row.creditAdjustments}
+                      disabled={!canEditProduction}
                       onChange={(event) =>
                         updateRow(
                           row.id,
@@ -197,7 +209,7 @@ export function EntryClient({ initialEntries, draftDate }: EntryClientProps) {
                           event.target.value,
                         )
                       }
-                      className="h-10 w-36 rounded-lg border border-line bg-white px-3 text-right font-mono text-ink"
+                      className="h-10 w-36 rounded-lg border border-line bg-white px-3 text-right font-mono text-ink disabled:bg-background disabled:text-muted"
                     />
                   </td>
                   <td className="px-5 py-3 text-right font-mono font-semibold text-ink">
@@ -211,10 +223,11 @@ export function EntryClient({ initialEntries, draftDate }: EntryClientProps) {
                       id={`${row.id}-note`}
                       type="text"
                       value={row.note ?? ""}
+                      disabled={!canEditProduction}
                       onChange={(event) =>
                         updateRow(row.id, "note", event.target.value)
                       }
-                      className="h-10 w-full rounded-lg border border-line bg-white px-3 text-ink"
+                      className="h-10 w-full rounded-lg border border-line bg-white px-3 text-ink disabled:bg-background disabled:text-muted"
                     />
                   </td>
                 </tr>

@@ -8,11 +8,13 @@ import {
   getMonthPlanFromData,
   money,
 } from "@/lib/bonus-calculations";
+import { requireCurrentProfile } from "@/lib/auth";
 import { getActiveMonth, getPracticeData } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
 export default async function SetupPage() {
+  await requireCurrentProfile();
   const data = await getPracticeData();
   const activeMonth = getActiveMonth(data.monthlyGoals);
   const goal = getMonthGoalFromData(data.monthlyGoals, activeMonth);

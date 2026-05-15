@@ -9,11 +9,13 @@ import {
   summarizeMonth,
   summarizeQuarterFromData,
 } from "@/lib/bonus-calculations";
+import { requireCurrentProfile } from "@/lib/auth";
 import { getPracticeData } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
 export default async function HistoryPage() {
+  await requireCurrentProfile();
   const data = await getPracticeData();
   const rows = data.monthlyGoals.map((goal) => {
     const entries = data.productionEntries.filter((entry) =>

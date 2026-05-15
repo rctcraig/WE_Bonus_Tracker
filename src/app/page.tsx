@@ -24,11 +24,13 @@ import {
   summarizeQuarterFromData,
   summarizeQuarterProjectionFromData,
 } from "@/lib/bonus-calculations";
+import { requireCurrentProfile } from "@/lib/auth";
 import { getActiveMonth, getPracticeData } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
+  await requireCurrentProfile();
   const data = await getPracticeData();
   const activeMonth = getActiveMonth(data.monthlyGoals);
   const monthGoal = getMonthGoalFromData(data.monthlyGoals, activeMonth);
