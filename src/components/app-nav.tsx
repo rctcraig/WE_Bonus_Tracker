@@ -9,6 +9,7 @@ import {
   History,
   LogOut,
   Settings,
+  UserCircle,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -91,6 +92,14 @@ export function AppNav() {
             >
               <Bell className="h-4 w-4" aria-hidden="true" />
             </button>
+            <Link
+              href="/account"
+              className="flex h-10 w-10 items-center justify-center rounded-lg border border-line text-muted transition hover:bg-background hover:text-ink"
+              aria-label="Account"
+              title="Account"
+            >
+              <UserCircle className="h-4 w-4" aria-hidden="true" />
+            </Link>
             <button
               type="button"
               onClick={handleSignOut}

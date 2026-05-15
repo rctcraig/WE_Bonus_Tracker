@@ -1,5 +1,6 @@
 import { BellRing, MailPlus, ShieldCheck, Smartphone, Users } from "lucide-react";
 import { InviteForm } from "@/app/admin/invite-form";
+import { SendSetupLinkButton } from "@/app/admin/send-setup-link-button";
 import { MetricCard } from "@/components/metric-card";
 import { StatusBadge } from "@/components/status-badge";
 import { requireCurrentProfile } from "@/lib/auth";
@@ -17,6 +18,12 @@ type ProfileRow = {
   created_at: string;
 };
 
+type PracticeUser = ProfileRow & {
+  email: string | null;
+  emailConfirmed: boolean;
+  lastSignInAt: string | null;
+};
+
 export default async function AdminPage() {
   const currentProfile = await requireCurrentProfile();
   const assignableRoles = assignableRolesFor(currentProfile.role);
@@ -27,8 +34,22 @@ export default async function AdminPage() {
     .eq("practice_id", currentProfile.practiceId)
     .order("role", { ascending: true })
     .order("full_name", { ascending: true });
+  const { data: authUsersData } = await admin.auth.admin.listUsers();
 
   const profiles = (data ?? []) as ProfileRow[];
+  const authUsersById = new Map(
+    (authUsersData?.users ?? []).map((user) => [user.id, user]),
+  );
+  const practiceUsers: PracticeUser[] = profiles.map((profile) => {
+    const authUser = authUsersById.get(profile.user_id);
+
+    return {
+      ...profile,
+      email: authUser?.email ?? null,
+      emailConfirmed: Boolean(authUser?.email_confirmed_at),
+      lastSignInAt: authUser?.last_sign_in_at ?? null,
+    };
+  });
   const notificationCount = profiles.filter(
     (profile) => profile.notifications_enabled,
   ).length;
@@ -135,27 +156,41 @@ export default async function AdminPage() {
         <div className="border-b border-line p-5">
           <h2 className="text-lg font-semibold text-ink">Practice users</h2>
           <p className="text-sm text-muted">
-            Roles control who can invite and who can save production entries.
+            Send a fresh setup link when an invite expires or a user needs to
+            reset their password.
           </p>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] border-collapse text-sm">
+          <table className="w-full min-w-[980px] border-collapse text-sm">
             <thead className="bg-background text-left text-xs uppercase tracking-[0.08em] text-muted">
               <tr>
                 <th className="px-5 py-3 font-semibold">Name</th>
+                <th className="px-5 py-3 font-semibold">Email</th>
                 <th className="px-5 py-3 font-semibold">Role</th>
+                <th className="px-5 py-3 font-semibold">Status</th>
                 <th className="px-5 py-3 font-semibold">Notifications</th>
                 <th className="px-5 py-3 font-semibold">Access</th>
+                <th className="px-5 py-3 font-semibold">Setup</th>
               </tr>
             </thead>
             <tbody>
-              {profiles.map((profile) => (
+              {practiceUsers.map((profile) => (
                 <tr key={profile.user_id} className="border-t border-line">
                   <td className="px-5 py-3 font-medium text-ink">
                     {profile.full_name}
                   </td>
                   <td className="px-5 py-3 text-muted">
+                    {profile.email ?? "No email"}
+                  </td>
+                  <td className="px-5 py-3 text-muted">
                     {roleLabels[profile.role]}
+                  </td>
+                  <td className="px-5 py-3">
+                    <StatusBadge
+                      tone={profile.emailConfirmed ? "good" : "warning"}
+                    >
+                      {profile.emailConfirmed ? "Active" : "Invite pending"}
+                    </StatusBadge>
                   </td>
                   <td className="px-5 py-3">
                     <StatusBadge
@@ -171,11 +206,14 @@ export default async function AdminPage() {
                         ? "Future staff view"
                         : "View only"}
                   </td>
+                  <td className="px-5 py-3">
+                    <SendSetupLinkButton userId={profile.user_id} />
+                  </td>
                 </tr>
               ))}
               {!profiles.length ? (
                 <tr className="border-t border-line">
-                  <td className="px-5 py-8 text-muted" colSpan={4}>
+                  <td className="px-5 py-8 text-muted" colSpan={7}>
                     No profiles found yet.
                   </td>
                 </tr>

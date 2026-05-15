@@ -63,6 +63,9 @@ Roles:
 - Leadership: can view all tracker pages
 - Staff: reserved for future staff access
 
+Admins and office managers can resend expired setup links from the Admin user
+table. Signed-in users can change their own password from Account.
+
 ## Verification
 
 ```bash

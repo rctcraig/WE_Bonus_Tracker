@@ -9,10 +9,10 @@ export default function SetPasswordPage() {
             Invite accepted
           </p>
           <h1 className="mt-2 text-2xl font-semibold text-ink">
-            Set your password
+            Set or reset your password
           </h1>
           <p className="mt-2 text-sm text-muted">
-            Create a password to finish setting up your account.
+            Create a new password to finish setup or regain access.
           </p>
         </div>
         <SetPasswordForm />
