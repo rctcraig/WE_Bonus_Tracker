@@ -176,6 +176,7 @@ export const mayProductionEntries: ProductionEntry[] = [
 export const monthPlans: MonthPlan[] = [
   {
     month: "2026-05",
+    plannedWorkdayCount: 20,
     avgMthDoctorDay: 10800,
     avgFridayDoctorDay: 5500,
     plannedProductionDates: [

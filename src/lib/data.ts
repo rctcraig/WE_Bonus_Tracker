@@ -235,6 +235,7 @@ export async function getPracticeData(): Promise<PracticeData> {
 
     return {
       month: monthId(plan.month),
+      plannedWorkdayCount: plan.planned_workday_count,
       plannedProductionDates: scheduledDays.map((day) => day.date),
       avgMthDoctorDay: Number(plan.avg_mth_doctor_day),
       avgFridayDoctorDay: Number(plan.avg_friday_doctor_day),

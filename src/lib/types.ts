@@ -43,6 +43,7 @@ export type ScheduleDay = {
 
 export type MonthPlan = {
   month: string;
+  plannedWorkdayCount: number;
   plannedProductionDates: string[];
   avgMthDoctorDay: number;
   avgFridayDoctorDay: number;
