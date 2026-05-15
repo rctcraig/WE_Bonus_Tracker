@@ -3,6 +3,7 @@
 import { KeyRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import { updateInvitePassword } from "@/app/auth/set-password/actions";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export function SetPasswordForm() {
@@ -74,11 +75,10 @@ export function SetPasswordForm() {
     }
 
     startTransition(async () => {
-      const supabase = getSupabaseBrowserClient();
-      const { error } = await supabase.auth.updateUser({ password });
+      const result = await updateInvitePassword(password);
 
-      if (error) {
-        setMessage(error.message);
+      if (!result.ok) {
+        setMessage(result.message);
         return;
       }
 
