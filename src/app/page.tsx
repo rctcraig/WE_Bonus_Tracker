@@ -22,6 +22,7 @@ import {
   summarizeDriveForNine,
   summarizeMonth,
   summarizeQuarterFromData,
+  summarizeQuarterProjectionFromData,
 } from "@/lib/bonus-calculations";
 import { getActiveMonth, getPracticeData } from "@/lib/data";
 
@@ -47,6 +48,13 @@ export default async function Home() {
     data.productionEntries,
     data.bonusTiers,
   );
+  const currentQuarterProjection = summarizeQuarterProjectionFromData(
+    getQuarterForMonthFromData(data.quarters, activeMonth),
+    data.monthlyGoals,
+    data.monthPlans,
+    data.productionEntries,
+    data.bonusTiers,
+  );
   const currentDriveForNineSummary = summarizeDriveForNine(
     getDriveForNineCampaignFromData(data.driveForNineCampaigns, activeMonth),
     currentMonthSummary,
@@ -65,6 +73,20 @@ export default async function Home() {
           currentMonthSummary.remainingExpected) *
         100
       : 0;
+  const remainingDoctorDays = currentMonthSummary.remainingSchedule.reduce(
+    (sum, day) => sum + day.doctors,
+    0,
+  );
+  const nextQuarterTier = currentQuarterProjection.nextProjectedTier;
+  const nextQuarterTierTarget = nextQuarterTier
+    ? currentQuarterProjection.goal * (nextQuarterTier.thresholdPct / 100)
+    : currentQuarterProjection.projected;
+  const nextQuarterTierGap = Math.max(
+    nextQuarterTierTarget - currentQuarterProjection.projected,
+    0,
+  );
+  const extraPerRemainingDoctorDay =
+    remainingDoctorDays > 0 ? nextQuarterTierGap / remainingDoctorDays : 0;
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -144,20 +166,21 @@ export default async function Home() {
         />
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+      <section className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
         <div className="rounded-lg border border-line bg-panel p-5 shadow-sm">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-lg font-semibold text-ink">
-                {monthGoal.label} plan check
+                {monthGoal.label} S1P target
               </h2>
               <p className="text-sm text-muted">
-                S1P goal progress plus the internal doctor-day forecast.
+                Official goal first; doctor-day capacity tells us how much room
+                we have.
               </p>
             </div>
-            <StatusBadge tone={schedulePaceVariance >= 0 ? "good" : "danger"}>
-              {money(Math.abs(schedulePaceVariance))}{" "}
-              {schedulePaceVariance >= 0 ? "above" : "below"} doctor-day plan
+            <StatusBadge tone={monthForecastVariance >= 0 ? "good" : "danger"}>
+              Forecast {monthForecastVariance >= 0 ? "ahead" : "behind"} by{" "}
+              {money(Math.abs(monthForecastVariance))}
             </StatusBadge>
           </div>
 
@@ -169,38 +192,26 @@ export default async function Home() {
               )}`}
             />
             <ProgressBar
-              value={
-                currentMonthSummary.expectedThroughEntries > 0
-                  ? (currentMonthSummary.actual /
-                      currentMonthSummary.expectedThroughEntries) *
-                    100
-                  : 0
-              }
+              value={remainingCapacityNeed}
               marker={100}
-              label={`Doctor-day plan through ${
-                lastEntry ? compactDate(lastEntry.date) : "latest entry"
-              }: ${percent(
-                currentMonthSummary.expectedThroughEntries > 0
-                  ? (currentMonthSummary.actual /
-                      currentMonthSummary.expectedThroughEntries) *
-                      100
-                  : 0,
-              )} of expected`}
+              label={`Required from remaining schedule: ${percent(
+                remainingCapacityNeed,
+              )} of expected capacity`}
             />
           </div>
 
           <dl className="mt-6 grid gap-3 sm:grid-cols-3">
             <div className="border-t border-line pt-3">
               <dt className="text-xs font-medium uppercase tracking-[0.08em] text-muted">
-                Doctor-day expected so far
+                Need from here
               </dt>
               <dd className="mt-1 text-lg font-semibold text-ink">
-                {money(currentMonthSummary.expectedThroughEntries)}
+                {money(currentMonthSummary.remainingNeeded)}
               </dd>
             </div>
             <div className="border-t border-line pt-3">
               <dt className="text-xs font-medium uppercase tracking-[0.08em] text-muted">
-                Remaining expected capacity
+                Remaining capacity
               </dt>
               <dd className="mt-1 text-lg font-semibold text-ink">
                 {money(currentMonthSummary.remainingExpected)}
@@ -208,38 +219,96 @@ export default async function Home() {
             </div>
             <div className="border-t border-line pt-3">
               <dt className="text-xs font-medium uppercase tracking-[0.08em] text-muted">
-                Schedule change impact
+                Capacity cushion
               </dt>
-              <dd className="mt-1 text-lg font-semibold text-danger">
-                {money(currentMonthSummary.scheduleChangeImpact)}
+              <dd
+                className={`mt-1 text-lg font-semibold ${
+                  monthForecastVariance >= 0 ? "text-success" : "text-danger"
+                }`}
+              >
+                {money(monthForecastVariance)}
               </dd>
             </div>
           </dl>
+          <p className="mt-4 rounded-lg bg-background px-3 py-2 text-sm text-muted">
+            Internal doctor-day pace through{" "}
+            {lastEntry ? compactDate(lastEntry.date) : "latest entry"} is{" "}
+            {money(Math.abs(schedulePaceVariance))}{" "}
+            {schedulePaceVariance >= 0 ? "above" : "below"} expected. Useful
+            context, but the S1P goal is the scoreboard.
+          </p>
         </div>
 
-        <div className="rounded-lg border border-line bg-panel p-5 shadow-sm">
+        <div className="rounded-lg border-2 border-success bg-panel p-5 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-ink">Q2 staff bonus</h2>
               <p className="text-sm text-muted">
-                Estimated until profitability is marked favorable.
+                Tracking estimate assumes May forecast plus June S1P goal.
               </p>
             </div>
             <StatusBadge tone="warning">Profitability unknown</StatusBadge>
           </div>
-          <div className="mt-5">
-            <p className="text-3xl font-semibold text-ink">
-              {percent(currentQuarterSummary.pct)}
+          <div className="mt-5 rounded-lg bg-[#edf7f0] p-4">
+            <p className="text-xs font-medium uppercase tracking-[0.08em] text-success">
+              Tracking to
+            </p>
+            <p className="mt-1 text-3xl font-semibold text-success">
+              {currentQuarterProjection.projectedTier
+                ? `${currentQuarterProjection.projectedTier.thresholdPct.toFixed(
+                    0,
+                  )}% tier`
+                : "No tier yet"}
+            </p>
+            <p className="mt-1 text-sm font-medium text-ink">
+              {currentQuarterProjection.projectedTier
+                ? `${money(
+                    currentQuarterProjection.projectedTier.amount,
+                  )} estimated staff bonus`
+                : "Build toward the 97% threshold"}
             </p>
             <p className="mt-1 text-sm text-muted">
-              {money(currentQuarterSummary.actual)} of{" "}
-              {money(currentQuarterSummary.goal)}
+              Projected Q2: {money(currentQuarterProjection.projected)} (
+              {percent(currentQuarterProjection.projectedPct)})
             </p>
           </div>
+
+          {nextQuarterTier ? (
+            <div className="mt-4 rounded-lg border border-[#eed4a9] bg-[#fff6e8] p-4">
+              <p className="text-xs font-medium uppercase tracking-[0.08em] text-warning">
+                Rally target
+              </p>
+              <p className="mt-1 text-lg font-semibold text-ink">
+                Add {money(extraPerRemainingDoctorDay)} per remaining May
+                doctor-day
+              </p>
+              <p className="mt-1 text-sm text-muted">
+                That closes the {money(nextQuarterTierGap)} gap to the{" "}
+                {nextQuarterTier.thresholdPct.toFixed(0)}% tier (
+                {money(nextQuarterTier.amount)}).
+              </p>
+            </div>
+          ) : (
+            <div className="mt-4 rounded-lg border border-[#b6d8c4] bg-[#edf7f0] p-4">
+              <p className="text-sm font-semibold text-success">
+                Top tier is already projected.
+              </p>
+            </div>
+          )}
+
+          <p className="mt-4 text-sm text-muted">
+            Q2 actual entered so far: {money(currentQuarterSummary.actual)} of{" "}
+            {money(currentQuarterSummary.goal)} (
+            {percent(currentQuarterSummary.pct)}).
+          </p>
           <div className="mt-5">
             <TierLadder
-              percentValue={currentQuarterSummary.pct}
+              percentValue={currentQuarterProjection.projectedPct}
               tiers={data.bonusTiers}
+              activeThreshold={
+                currentQuarterProjection.projectedTier?.thresholdPct
+              }
+              nextThreshold={nextQuarterTier?.thresholdPct}
             />
           </div>
         </div>

@@ -275,6 +275,43 @@ export function summarizeQuarterFromData(
   };
 }
 
+export function summarizeQuarterProjectionFromData(
+  quarter: Quarter,
+  goals: MonthlyGoal[],
+  plans: MonthPlan[],
+  entries: ProductionEntry[],
+  tiers: BonusTier[],
+) {
+  const base = summarizeQuarterFromData(quarter, goals, plans, entries, tiers);
+  const projected = quarter.months.reduce((sum, month) => {
+    const goal = getMonthGoalFromData(goals, month);
+    const plan = getMonthPlanFromData(plans, month);
+    const monthEntries = entries.filter((entry) => entry.date.startsWith(month));
+    const summary = summarizeMonth(goal, plan, monthEntries);
+
+    if (goal.closed) {
+      return sum + summary.actual;
+    }
+
+    if (monthEntries.length > 0 || plan) {
+      return sum + summary.forecast;
+    }
+
+    return sum + goal.s1pGoal;
+  }, 0);
+  const projectedPct = base.goal > 0 ? (projected / base.goal) * 100 : 0;
+  const projectedTier = tierForPercent(tiers, projectedPct);
+  const nextProjectedTier = nextTierForPercent(tiers, projectedPct);
+
+  return {
+    ...base,
+    projected,
+    projectedPct,
+    projectedTier,
+    nextProjectedTier,
+  };
+}
+
 export function summarizeDriveForNine(
   campaign: DriveForNineCampaign,
   monthSummary: ReturnType<typeof summarizeMonth>,
