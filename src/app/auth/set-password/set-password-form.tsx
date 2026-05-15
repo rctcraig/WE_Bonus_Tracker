@@ -10,14 +10,47 @@ export function SetPasswordForm() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [ready, setReady] = useState(false);
+  const [checkingInvite, setCheckingInvite] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
-    supabase.auth.getSession().then(({ data }) => {
+    async function activateInviteSession() {
+      const url = new URL(window.location.href);
+      const code = url.searchParams.get("code");
+      const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
+      const accessToken = hashParams.get("access_token");
+      const refreshToken = hashParams.get("refresh_token");
+
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+        if (error) {
+          setMessage(error.message);
+        } else {
+          window.history.replaceState({}, "", url.pathname);
+        }
+      } else if (accessToken && refreshToken) {
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (error) {
+          setMessage(error.message);
+        } else {
+          window.history.replaceState({}, "", url.pathname);
+        }
+      }
+
+      const { data } = await supabase.auth.getSession();
       setReady(Boolean(data.session));
-    });
+      setCheckingInvite(false);
+    }
+
+    activateInviteSession();
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -64,8 +97,9 @@ export function SetPasswordForm() {
     >
       {!ready ? (
         <p className="rounded-lg border border-[#eed4a9] bg-[#fff6e8] px-3 py-2 text-sm font-medium text-warning">
-          If this page does not activate, open the invite link again or request a
-          new invite.
+          {checkingInvite
+            ? "Checking the invite link."
+            : "This invite link is not active. Open the newest invite email or request a new invite."}
         </p>
       ) : null}
       <div>
