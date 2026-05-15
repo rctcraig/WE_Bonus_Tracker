@@ -25,6 +25,7 @@ export default async function SetupPage({
       goals={data.monthlyGoals}
       initialMonth={selectedMonth}
       plans={data.monthPlans}
+      productionEntries={data.productionEntries}
     />
   );
 }

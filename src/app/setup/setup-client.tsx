@@ -1,12 +1,25 @@
 "use client";
 
-import { CalendarPlus, ClipboardCheck, Plus, Save, Trash2, UserMinus } from "lucide-react";
+import {
+  Calculator,
+  CalendarPlus,
+  ClipboardCheck,
+  Plus,
+  Save,
+  Trash2,
+  UserMinus,
+} from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { saveMonthSetup } from "@/app/setup/actions";
 import { MetricCard } from "@/components/metric-card";
 import { StatusBadge } from "@/components/status-badge";
-import { fullDate, money } from "@/lib/bonus-calculations";
-import type { DayType, MonthPlan, MonthlyGoal } from "@/lib/types";
+import { adjustedProduction, fullDate, money } from "@/lib/bonus-calculations";
+import type {
+  DayType,
+  MonthPlan,
+  MonthlyGoal,
+  ProductionEntry,
+} from "@/lib/types";
 
 type DraftScheduleDay = {
   id: string;
@@ -31,6 +44,16 @@ type SetupClientProps = {
   goals: MonthlyGoal[];
   initialMonth: string;
   plans: MonthPlan[];
+  productionEntries: ProductionEntry[];
+};
+
+type AverageRecommendation = {
+  mthAverage?: number;
+  fridayAverage?: number;
+  mthDoctorDays: number;
+  fridayDoctorDays: number;
+  mthEntryDays: number;
+  fridayEntryDays: number;
 };
 
 function monthLabel(month: string) {
@@ -55,6 +78,7 @@ function draftForMonth(
   month: string,
   goals: MonthlyGoal[],
   plans: MonthPlan[],
+  recommendation: AverageRecommendation,
 ): SetupDraft {
   const goal = goals.find((item) => item.month === month);
   const plan = plans.find((item) => item.month === month);
@@ -64,11 +88,17 @@ function draftForMonth(
 
   return {
     month,
-    s1pGoal: goal?.s1pGoal ?? 0,
+    s1pGoal: Math.round(goal?.s1pGoal ?? 0),
     avgMthDoctorDay:
-      plan?.avgMthDoctorDay ?? priorPlan?.avgMthDoctorDay ?? 10800,
+      plan?.avgMthDoctorDay ??
+      recommendation.mthAverage ??
+      priorPlan?.avgMthDoctorDay ??
+      10800,
     avgFridayDoctorDay:
-      plan?.avgFridayDoctorDay ?? priorPlan?.avgFridayDoctorDay ?? 5500,
+      plan?.avgFridayDoctorDay ??
+      recommendation.fridayAverage ??
+      priorPlan?.avgFridayDoctorDay ??
+      5500,
     plannedWorkdayCount:
       plan?.plannedWorkdayCount ?? plan?.scheduledDays.length ?? 0,
     scheduleDays:
@@ -80,6 +110,51 @@ function draftForMonth(
         originalDoctors: day.originalDoctors ?? day.doctors,
         changeReason: day.changeReason ?? "",
       })) ?? [],
+  };
+}
+
+function averageRecommendationForMonth(
+  month: string,
+  plans: MonthPlan[],
+  productionEntries: ProductionEntry[],
+): AverageRecommendation {
+  const entryByDate = new Map(
+    productionEntries
+      .filter((entry) => entry.date < `${month}-01`)
+      .map((entry) => [entry.date, entry]),
+  );
+  const totals = {
+    mth: { adjusted: 0, doctorDays: 0, entryDays: 0 },
+    friday: { adjusted: 0, doctorDays: 0, entryDays: 0 },
+  };
+
+  for (const plan of plans) {
+    for (const day of plan.scheduledDays) {
+      const entry = entryByDate.get(day.date);
+
+      if (!entry || day.doctors <= 0) {
+        continue;
+      }
+
+      totals[day.dayType].adjusted += adjustedProduction(entry);
+      totals[day.dayType].doctorDays += day.doctors;
+      totals[day.dayType].entryDays += 1;
+    }
+  }
+
+  return {
+    mthAverage:
+      totals.mth.doctorDays > 0
+        ? Math.round(totals.mth.adjusted / totals.mth.doctorDays)
+        : undefined,
+    fridayAverage:
+      totals.friday.doctorDays > 0
+        ? Math.round(totals.friday.adjusted / totals.friday.doctorDays)
+        : undefined,
+    mthDoctorDays: totals.mth.doctorDays,
+    fridayDoctorDays: totals.friday.doctorDays,
+    mthEntryDays: totals.mth.entryDays,
+    fridayEntryDays: totals.friday.entryDays,
   };
 }
 
@@ -117,9 +192,15 @@ export function SetupClient({
   goals,
   initialMonth,
   plans,
+  productionEntries,
 }: SetupClientProps) {
+  const initialRecommendation = averageRecommendationForMonth(
+    initialMonth,
+    plans,
+    productionEntries,
+  );
   const [draft, setDraft] = useState(() =>
-    draftForMonth(initialMonth, goals, plans),
+    draftForMonth(initialMonth, goals, plans, initialRecommendation),
   );
   const [defaultMthDoctors, setDefaultMthDoctors] = useState(6);
   const [defaultFridayDoctors, setDefaultFridayDoctors] = useState(3);
@@ -128,6 +209,10 @@ export function SetupClient({
     message: string;
   } | null>(null);
   const [isPending, startTransition] = useTransition();
+  const recommendation = useMemo(
+    () => averageRecommendationForMonth(draft.month, plans, productionEntries),
+    [draft.month, plans, productionEntries],
+  );
 
   const monthOptions = useMemo(
     () => goals.map((goal) => goal.month).sort(),
@@ -168,7 +253,27 @@ export function SetupClient({
 
   function selectMonth(month: string) {
     setStatus(null);
-    setDraft(draftForMonth(month, goals, plans));
+    setDraft(
+      draftForMonth(
+        month,
+        goals,
+        plans,
+        averageRecommendationForMonth(month, plans, productionEntries),
+      ),
+    );
+  }
+
+  function applyCalculatedAverage(field: "avgMthDoctorDay" | "avgFridayDoctorDay") {
+    const value =
+      field === "avgMthDoctorDay"
+        ? recommendation.mthAverage
+        : recommendation.fridayAverage;
+
+    if (value === undefined) {
+      return;
+    }
+
+    setDraft((current) => ({ ...current, [field]: value }));
   }
 
   function updateDraft(field: keyof SetupDraft, value: number | string) {
@@ -356,7 +461,18 @@ export function SetupClient({
 
       <section className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
         <div className="rounded-lg border border-line bg-panel p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-ink">Month inputs</h2>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-ink">Month inputs</h2>
+              <p className="mt-1 text-sm text-muted">
+                Averages are suggested from prior dates with actual production
+                and doctor counts.
+              </p>
+            </div>
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-background text-muted">
+              <Calculator className="h-5 w-5" aria-hidden="true" />
+            </div>
+          </div>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-medium text-ink">
               S1P goal
@@ -382,32 +498,74 @@ export function SetupClient({
                 className="mt-2 h-11 w-full rounded-lg border border-line bg-white px-3 text-right font-mono text-ink disabled:bg-background disabled:text-muted"
               />
             </label>
-            <label className="text-sm font-medium text-ink">
-              M-Th average
-              <input
-                type="number"
-                min="0"
-                value={draft.avgMthDoctorDay}
-                disabled={!canEditSetup}
-                onChange={(event) =>
-                  updateDraft("avgMthDoctorDay", event.target.value)
-                }
-                className="mt-2 h-11 w-full rounded-lg border border-line bg-white px-3 text-right font-mono text-ink disabled:bg-background disabled:text-muted"
-              />
-            </label>
-            <label className="text-sm font-medium text-ink">
-              Friday average
-              <input
-                type="number"
-                min="0"
-                value={draft.avgFridayDoctorDay}
-                disabled={!canEditSetup}
-                onChange={(event) =>
-                  updateDraft("avgFridayDoctorDay", event.target.value)
-                }
-                className="mt-2 h-11 w-full rounded-lg border border-line bg-white px-3 text-right font-mono text-ink disabled:bg-background disabled:text-muted"
-              />
-            </label>
+            <div>
+              <label className="text-sm font-medium text-ink">
+                M-Th average
+                <input
+                  type="number"
+                  min="0"
+                  value={draft.avgMthDoctorDay}
+                  disabled={!canEditSetup}
+                  onChange={(event) =>
+                    updateDraft("avgMthDoctorDay", event.target.value)
+                  }
+                  className="mt-2 h-11 w-full rounded-lg border border-line bg-white px-3 text-right font-mono text-ink disabled:bg-background disabled:text-muted"
+                />
+              </label>
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <p className="text-xs text-muted">
+                  {recommendation.mthAverage !== undefined
+                    ? `${money(recommendation.mthAverage)} from ${
+                        recommendation.mthDoctorDays
+                      } doctor-days / ${recommendation.mthEntryDays} days`
+                    : "No calculated M-Th average yet"}
+                </p>
+                <button
+                  type="button"
+                  disabled={
+                    !canEditSetup || recommendation.mthAverage === undefined
+                  }
+                  onClick={() => applyCalculatedAverage("avgMthDoctorDay")}
+                  className="shrink-0 text-xs font-semibold text-ink underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:text-muted disabled:no-underline"
+                >
+                  Use calculated
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-ink">
+                Friday average
+                <input
+                  type="number"
+                  min="0"
+                  value={draft.avgFridayDoctorDay}
+                  disabled={!canEditSetup}
+                  onChange={(event) =>
+                    updateDraft("avgFridayDoctorDay", event.target.value)
+                  }
+                  className="mt-2 h-11 w-full rounded-lg border border-line bg-white px-3 text-right font-mono text-ink disabled:bg-background disabled:text-muted"
+                />
+              </label>
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <p className="text-xs text-muted">
+                  {recommendation.fridayAverage !== undefined
+                    ? `${money(recommendation.fridayAverage)} from ${
+                        recommendation.fridayDoctorDays
+                      } doctor-days / ${recommendation.fridayEntryDays} days`
+                    : "No calculated Friday average yet"}
+                </p>
+                <button
+                  type="button"
+                  disabled={
+                    !canEditSetup || recommendation.fridayAverage === undefined
+                  }
+                  onClick={() => applyCalculatedAverage("avgFridayDoctorDay")}
+                  className="shrink-0 text-xs font-semibold text-ink underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:text-muted disabled:no-underline"
+                >
+                  Use calculated
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
