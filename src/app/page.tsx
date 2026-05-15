@@ -87,6 +87,8 @@ export default async function Home() {
   );
   const extraPerRemainingDoctorDay =
     remainingDoctorDays > 0 ? nextQuarterTierGap / remainingDoctorDays : 0;
+  const normalDayExtra = extraPerRemainingDoctorDay * 6;
+  const fridayExtra = extraPerRemainingDoctorDay * 3;
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -279,10 +281,13 @@ export default async function Home() {
                 Rally target
               </p>
               <p className="mt-1 text-lg font-semibold text-ink">
-                Add {money(extraPerRemainingDoctorDay)} per remaining May
-                doctor-day
+                Add {money(extraPerRemainingDoctorDay)} per doctor per day
               </p>
               <p className="mt-1 text-sm text-muted">
+                About {money(normalDayExtra)} extra on a 6-doctor day or{" "}
+                {money(fridayExtra)} extra on a 3-doctor Friday.
+              </p>
+              <p className="mt-2 text-sm text-muted">
                 That closes the {money(nextQuarterTierGap)} gap to the{" "}
                 {nextQuarterTier.thresholdPct.toFixed(0)}% tier (
                 {money(nextQuarterTier.amount)}).
