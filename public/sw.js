@@ -1,6 +1,5 @@
-const CACHE_NAME = "we-bonus-tracker-v1";
+const CACHE_NAME = "we-bonus-tracker-v2";
 const APP_SHELL = [
-  "/",
   "/manifest.webmanifest",
   "/we-icon-192.png",
   "/we-icon-512.png",
@@ -27,8 +26,19 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  if (event.request.mode === "navigate") {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  const url = new URL(event.request.url);
+
+  if (!APP_SHELL.includes(url.pathname)) {
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request).then((cached) => {
+    caches.match(url.pathname).then((cached) => {
       if (cached) {
         return cached;
       }
