@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AppNav } from "@/components/app-nav";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
+import { getCurrentProfile } from "@/lib/auth";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -25,18 +26,20 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const profile = await getCurrentProfile();
+
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <AppNav />
+        <AppNav role={profile?.role ?? null} />
         {children}
         <ServiceWorkerRegister />
       </body>

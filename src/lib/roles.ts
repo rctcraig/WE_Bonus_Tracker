@@ -16,6 +16,10 @@ export function canEditProduction(role: Role) {
   return role === "admin" || role === "manager";
 }
 
+export function canViewInsights(role: Role) {
+  return role === "admin" || role === "manager" || role === "doctor";
+}
+
 export function assignableRolesFor(role: Role): Role[] {
   if (role === "admin") {
     return ["manager", "doctor", "leadership", "staff"];

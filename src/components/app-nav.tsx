@@ -2,6 +2,7 @@
 
 import clsx from "clsx";
 import {
+  BarChart3,
   Bell,
   CalendarDays,
   ClipboardList,
@@ -14,21 +15,36 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { canViewInsights } from "@/lib/roles";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import type { Role } from "@/lib/types";
 
 const links = [
   { href: "/", label: "Dashboard", icon: Gauge },
+  {
+    href: "/insights",
+    label: "Insights",
+    icon: BarChart3,
+    showFor: canViewInsights,
+  },
   { href: "/entry", label: "Entry", icon: ClipboardList },
   { href: "/setup", label: "Setup", icon: CalendarDays },
   { href: "/history", label: "History", icon: History },
   { href: "/admin", label: "Admin", icon: Settings },
 ];
 
-export function AppNav() {
+type AppNavProps = {
+  role?: Role | null;
+};
+
+export function AppNav({ role }: AppNavProps) {
   const pathname = usePathname();
   const router = useRouter();
   const isAuthPath =
     pathname.startsWith("/login") || pathname.startsWith("/auth");
+  const visibleLinks = links.filter(
+    (link) => !link.showFor || (role ? link.showFor(role) : false),
+  );
 
   async function handleSignOut() {
     await getSupabaseBrowserClient().auth.signOut();
@@ -60,7 +76,7 @@ export function AppNav() {
 
         {isAuthPath ? null : (
           <nav className="ml-auto hidden items-center gap-1 md:flex">
-            {links.map((link) => {
+            {visibleLinks.map((link) => {
               const Icon = link.icon;
               const active = pathname === link.href;
 
@@ -114,8 +130,13 @@ export function AppNav() {
       </div>
 
       {isAuthPath ? null : (
-        <nav className="grid grid-cols-5 border-t border-line bg-panel md:hidden">
-          {links.map((link) => {
+        <nav
+          className="grid border-t border-line bg-panel md:hidden"
+          style={{
+            gridTemplateColumns: `repeat(${visibleLinks.length}, minmax(0, 1fr))`,
+          }}
+        >
+          {visibleLinks.map((link) => {
             const Icon = link.icon;
             const active = pathname === link.href;
 
