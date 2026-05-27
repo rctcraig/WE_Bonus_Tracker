@@ -26,8 +26,146 @@ import {
 } from "@/lib/bonus-calculations";
 import { requireCurrentProfile } from "@/lib/auth";
 import { getActiveMonth, getPracticeData } from "@/lib/data";
+import type {
+  DayType,
+  MonthPlan,
+  MonthlyGoal,
+  ProductionEntry,
+  Quarter,
+} from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+
+type QuarterRallyWindow = {
+  estimatedDoctorDays: number;
+  estimatedMonths: string[];
+  fridayDoctors: number;
+  mthDoctors: number;
+  plannedDoctorDays: number;
+  totalDoctorDays: number;
+};
+
+function mostCommonDoctorCount(
+  plan: MonthPlan | undefined,
+  dayType: DayType,
+  fallback: number,
+) {
+  const counts = new Map<number, number>();
+
+  for (const day of plan?.scheduledDays ?? []) {
+    if (day.dayType !== dayType) {
+      continue;
+    }
+
+    counts.set(day.doctors, (counts.get(day.doctors) ?? 0) + 1);
+  }
+
+  return (
+    [...counts.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0]?.[0] ??
+    fallback
+  );
+}
+
+function estimateDoctorDaysForMonth(
+  month: string,
+  mthDoctors: number,
+  fridayDoctors: number,
+  enteredDates = new Set<string>(),
+) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const monthIndex = monthNumber - 1;
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  let doctorDays = 0;
+
+  for (let day = 1; day <= lastDay; day += 1) {
+    const date = new Date(year, monthIndex, day, 12);
+    const weekday = date.getDay();
+    const dateKey = `${month}-${String(day).padStart(2, "0")}`;
+
+    if (enteredDates.has(dateKey)) {
+      continue;
+    }
+
+    if (weekday >= 1 && weekday <= 4) {
+      doctorDays += mthDoctors;
+    }
+
+    if (weekday === 5) {
+      doctorDays += fridayDoctors;
+    }
+  }
+
+  return doctorDays;
+}
+
+function getQuarterRallyWindow({
+  activeMonth,
+  currentMonthPlan,
+  entries,
+  goals,
+  plans,
+  quarter,
+}: {
+  activeMonth: string;
+  currentMonthPlan: MonthPlan | undefined;
+  entries: ProductionEntry[];
+  goals: MonthlyGoal[];
+  plans: MonthPlan[];
+  quarter: Quarter;
+}): QuarterRallyWindow {
+  const mthDoctors = mostCommonDoctorCount(currentMonthPlan, "mth", 6);
+  const fridayDoctors = mostCommonDoctorCount(currentMonthPlan, "friday", 3);
+
+  return quarter.months.reduce<QuarterRallyWindow>(
+    (window, month) => {
+      if (month < activeMonth) {
+        return window;
+      }
+
+      const plan = getMonthPlanFromData(plans, month);
+      const monthEntries = entries.filter((entry) =>
+        entry.date.startsWith(month),
+      );
+      const enteredDates = new Set(monthEntries.map((entry) => entry.date));
+
+      if (plan) {
+        const plannedDoctorDays = plan.scheduledDays
+          .filter((day) => !enteredDates.has(day.date))
+          .reduce((sum, day) => sum + day.doctors, 0);
+
+        return {
+          ...window,
+          plannedDoctorDays: window.plannedDoctorDays + plannedDoctorDays,
+          totalDoctorDays: window.totalDoctorDays + plannedDoctorDays,
+        };
+      }
+
+      const estimatedDoctorDays = estimateDoctorDaysForMonth(
+        month,
+        mthDoctors,
+        fridayDoctors,
+        month === activeMonth ? enteredDates : new Set<string>(),
+      );
+      const label =
+        goals.find((goal) => goal.month === month)?.label ?? month;
+
+      return {
+        ...window,
+        estimatedDoctorDays: window.estimatedDoctorDays + estimatedDoctorDays,
+        estimatedMonths: [...window.estimatedMonths, label],
+        totalDoctorDays: window.totalDoctorDays + estimatedDoctorDays,
+      };
+    },
+    {
+      estimatedDoctorDays: 0,
+      estimatedMonths: [],
+      fridayDoctors,
+      mthDoctors,
+      plannedDoctorDays: 0,
+      totalDoctorDays: 0,
+    },
+  );
+}
 
 export default async function Home() {
   await requireCurrentProfile();
@@ -35,6 +173,7 @@ export default async function Home() {
   const activeMonth = getActiveMonth(data.monthlyGoals);
   const monthGoal = getMonthGoalFromData(data.monthlyGoals, activeMonth);
   const currentMonthPlan = getMonthPlanFromData(data.monthPlans, activeMonth);
+  const currentQuarter = getQuarterForMonthFromData(data.quarters, activeMonth);
   const monthEntries = data.productionEntries.filter((entry) =>
     entry.date.startsWith(activeMonth),
   );
@@ -44,14 +183,14 @@ export default async function Home() {
     monthEntries,
   );
   const currentQuarterSummary = summarizeQuarterFromData(
-    getQuarterForMonthFromData(data.quarters, activeMonth),
+    currentQuarter,
     data.monthlyGoals,
     data.monthPlans,
     data.productionEntries,
     data.bonusTiers,
   );
   const currentQuarterProjection = summarizeQuarterProjectionFromData(
-    getQuarterForMonthFromData(data.quarters, activeMonth),
+    currentQuarter,
     data.monthlyGoals,
     data.monthPlans,
     data.productionEntries,
@@ -75,10 +214,14 @@ export default async function Home() {
           currentMonthSummary.remainingExpected) *
         100
       : 0;
-  const remainingDoctorDays = currentMonthSummary.remainingSchedule.reduce(
-    (sum, day) => sum + day.doctors,
-    0,
-  );
+  const quarterRallyWindow = getQuarterRallyWindow({
+    activeMonth,
+    currentMonthPlan,
+    entries: data.productionEntries,
+    goals: data.monthlyGoals,
+    plans: data.monthPlans,
+    quarter: currentQuarter,
+  });
   const nextQuarterTier = currentQuarterProjection.nextProjectedTier;
   const nextQuarterTierTarget = nextQuarterTier
     ? currentQuarterProjection.goal * (nextQuarterTier.thresholdPct / 100)
@@ -88,9 +231,13 @@ export default async function Home() {
     0,
   );
   const extraPerRemainingDoctorDay =
-    remainingDoctorDays > 0 ? nextQuarterTierGap / remainingDoctorDays : 0;
-  const normalDayExtra = extraPerRemainingDoctorDay * 6;
-  const fridayExtra = extraPerRemainingDoctorDay * 3;
+    quarterRallyWindow.totalDoctorDays > 0
+      ? nextQuarterTierGap / quarterRallyWindow.totalDoctorDays
+      : 0;
+  const normalDayExtra =
+    extraPerRemainingDoctorDay * quarterRallyWindow.mthDoctors;
+  const fridayExtra =
+    extraPerRemainingDoctorDay * quarterRallyWindow.fridayDoctors;
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -248,7 +395,8 @@ export default async function Home() {
             <div>
               <h2 className="text-lg font-semibold text-ink">Q2 staff bonus</h2>
               <p className="text-sm text-muted">
-                Tracking estimate assumes May forecast plus June S1P goal.
+                Projected from entered actuals, open-month forecasts, and S1P
+                goals for future months until setup is entered.
               </p>
             </div>
             <StatusBadge tone="warning">Profitability unknown</StatusBadge>
@@ -286,14 +434,32 @@ export default async function Home() {
                 Add {money(extraPerRemainingDoctorDay)} per doctor per day
               </p>
               <p className="mt-1 text-sm text-muted">
-                About {money(normalDayExtra)} extra on a 6-doctor day or{" "}
-                {money(fridayExtra)} extra on a 3-doctor Friday.
+                About {money(normalDayExtra)} extra on a{" "}
+                {quarterRallyWindow.mthDoctors}-doctor day or{" "}
+                {money(fridayExtra)} extra on a{" "}
+                {quarterRallyWindow.fridayDoctors}-doctor Friday.
               </p>
               <p className="mt-2 text-sm text-muted">
-                That closes the {money(nextQuarterTierGap)} gap to the{" "}
+                Spread across {quarterRallyWindow.totalDoctorDays} remaining Q2
+                doctor-days, that closes the {money(nextQuarterTierGap)} gap to
+                the{" "}
                 {nextQuarterTier.thresholdPct.toFixed(0)}% tier (
                 {money(nextQuarterTier.amount)}).
               </p>
+              {quarterRallyWindow.estimatedDoctorDays > 0 ? (
+                <p className="mt-2 text-sm text-muted">
+                  Includes {quarterRallyWindow.plannedDoctorDays} planned
+                  doctor-days and {quarterRallyWindow.estimatedDoctorDays}{" "}
+                  estimated doctor-days for{" "}
+                  {quarterRallyWindow.estimatedMonths.join(", ")} until that
+                  setup is entered.
+                </p>
+              ) : (
+                <p className="mt-2 text-sm text-muted">
+                  Uses the entered remaining Q2 schedule and will update when
+                  setup changes.
+                </p>
+              )}
             </div>
           ) : (
             <div className="mt-4 rounded-lg border border-[#b6d8c4] bg-[#edf7f0] p-4">
