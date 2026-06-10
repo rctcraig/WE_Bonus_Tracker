@@ -1,4 +1,4 @@
-import { BellRing, MailPlus, ShieldCheck, Smartphone, Users } from "lucide-react";
+import { MailPlus, ShieldCheck, Users } from "lucide-react";
 import { redirect } from "next/navigation";
 import { InviteForm } from "@/app/admin/invite-form";
 import { SendSetupLinkButton } from "@/app/admin/send-setup-link-button";
@@ -57,10 +57,6 @@ export default async function AdminPage() {
       lastSignInAt: authUser?.last_sign_in_at ?? null,
     };
   });
-  const notificationCount = profiles.filter(
-    (profile) => profile.notifications_enabled,
-  ).length;
-
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
       <section className="border-b border-line pb-6">
@@ -84,7 +80,7 @@ export default async function AdminPage() {
         </p>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-2">
         <MetricCard
           title="Active profiles"
           value={profiles.length.toString()}
@@ -102,16 +98,9 @@ export default async function AdminPage() {
           icon={<ShieldCheck className="h-4 w-4" aria-hidden="true" />}
           tone={assignableRoles.length ? "good" : "neutral"}
         />
-        <MetricCard
-          title="Push recipients"
-          value={notificationCount.toString()}
-          detail="Staff role remains notification-off by default"
-          icon={<BellRing className="h-4 w-4" aria-hidden="true" />}
-          tone="good"
-        />
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
+      <section>
         <div className="rounded-lg border border-line bg-panel p-5 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -135,31 +124,6 @@ export default async function AdminPage() {
             </div>
           )}
         </div>
-
-        <div className="rounded-lg border border-line bg-panel p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-ink">Notifications</h2>
-          <dl className="mt-5 space-y-4 text-sm">
-            <div className="flex items-center justify-between gap-4 border-b border-line pb-3">
-              <dt className="text-muted">Missing entry reminder</dt>
-              <dd className="font-semibold text-ink">12:00 PM</dd>
-            </div>
-            <div className="flex items-center justify-between gap-4 border-b border-line pb-3">
-              <dt className="text-muted">Monday summary</dt>
-              <dd className="font-semibold text-ink">8:00 AM</dd>
-            </div>
-            <div className="flex items-center justify-between gap-4 border-b border-line pb-3">
-              <dt className="text-muted">Drive for Nine threshold</dt>
-              <dd className="font-semibold text-ink">Immediate</dd>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <dt className="text-muted">PWA shell</dt>
-              <dd className="inline-flex items-center gap-1 font-semibold text-ink">
-                <Smartphone className="h-4 w-4" aria-hidden="true" />
-                Ready
-              </dd>
-            </div>
-          </dl>
-        </div>
       </section>
 
       <section className="rounded-lg border border-line bg-panel shadow-sm">
@@ -178,7 +142,6 @@ export default async function AdminPage() {
                 <th className="px-5 py-3 font-semibold">Email</th>
                 <th className="px-5 py-3 font-semibold">Role</th>
                 <th className="px-5 py-3 font-semibold">Status</th>
-                <th className="px-5 py-3 font-semibold">Notifications</th>
                 <th className="px-5 py-3 font-semibold">Access</th>
                 <th className="px-5 py-3 font-semibold">Setup</th>
               </tr>
@@ -202,13 +165,6 @@ export default async function AdminPage() {
                       {profile.emailConfirmed ? "Active" : "Invite pending"}
                     </StatusBadge>
                   </td>
-                  <td className="px-5 py-3">
-                    <StatusBadge
-                      tone={profile.notifications_enabled ? "good" : "neutral"}
-                    >
-                      {profile.notifications_enabled ? "Enabled" : "Off"}
-                    </StatusBadge>
-                  </td>
                   <td className="px-5 py-3 text-muted">
                     {profile.role === "admin" || profile.role === "manager"
                       ? "Can save and invite"
@@ -223,7 +179,7 @@ export default async function AdminPage() {
               ))}
               {!profiles.length ? (
                 <tr className="border-t border-line">
-                  <td className="px-5 py-8 text-muted" colSpan={7}>
+                  <td className="px-5 py-8 text-muted" colSpan={6}>
                     No profiles found yet.
                   </td>
                 </tr>
