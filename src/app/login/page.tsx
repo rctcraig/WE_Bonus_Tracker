@@ -1,4 +1,5 @@
 import { LoginForm } from "@/app/login/login-form";
+import { sanitizeNextPath } from "@/lib/safe-redirect";
 
 export default async function LoginPage({
   searchParams,
@@ -6,10 +7,7 @@ export default async function LoginPage({
   searchParams: Promise<{ error?: string; next?: string }>;
 }) {
   const params = await searchParams;
-  const nextPath =
-    params.next?.startsWith("/") && !params.next.startsWith("//")
-      ? params.next
-      : "/";
+  const nextPath = sanitizeNextPath(params.next);
 
   return (
     <main className="grid min-h-[calc(100vh-66px)] place-items-center px-4 py-10">
@@ -29,6 +27,12 @@ export default async function LoginPage({
           <p className="mb-4 rounded-lg border border-[#f3bbb5] bg-[#fff0ee] px-3 py-2 text-sm font-medium text-danger">
             Your sign-in works, but this account has not been assigned to the
             practice yet. Ask an admin to resend the invite.
+          </p>
+        ) : null}
+        {params.error === "auth_callback" ? (
+          <p className="mb-4 rounded-lg border border-[#f3bbb5] bg-[#fff0ee] px-3 py-2 text-sm font-medium text-danger">
+            That sign-in link is invalid or has expired. Ask an admin to send a
+            fresh setup link.
           </p>
         ) : null}
         <LoginForm nextPath={nextPath} />

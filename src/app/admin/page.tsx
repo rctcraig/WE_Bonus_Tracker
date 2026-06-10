@@ -1,10 +1,11 @@
 import { BellRing, MailPlus, ShieldCheck, Smartphone, Users } from "lucide-react";
+import { redirect } from "next/navigation";
 import { InviteForm } from "@/app/admin/invite-form";
 import { SendSetupLinkButton } from "@/app/admin/send-setup-link-button";
 import { MetricCard } from "@/components/metric-card";
 import { StatusBadge } from "@/components/status-badge";
 import { requireCurrentProfile } from "@/lib/auth";
-import { assignableRolesFor, roleLabels } from "@/lib/roles";
+import { assignableRolesFor, canInvite, roleLabels } from "@/lib/roles";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Role } from "@/lib/types";
 
@@ -26,6 +27,11 @@ type PracticeUser = ProfileRow & {
 
 export default async function AdminPage() {
   const currentProfile = await requireCurrentProfile();
+
+  if (!canInvite(currentProfile.role)) {
+    redirect("/");
+  }
+
   const assignableRoles = assignableRolesFor(currentProfile.role);
   const admin = getSupabaseAdminClient();
   const { data, error } = await admin
@@ -34,7 +40,8 @@ export default async function AdminPage() {
     .eq("practice_id", currentProfile.practiceId)
     .order("role", { ascending: true })
     .order("full_name", { ascending: true });
-  const { data: authUsersData } = await admin.auth.admin.listUsers();
+  const { data: authUsersData, error: authUsersError } =
+    await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
 
   const profiles = (data ?? []) as ProfileRow[];
   const authUsersById = new Map(
@@ -65,6 +72,9 @@ export default async function AdminPage() {
             {assignableRoles.length ? "Invites enabled" : "View only"}
           </StatusBadge>
           {error ? <StatusBadge tone="danger">Profile load issue</StatusBadge> : null}
+          {authUsersError ? (
+            <StatusBadge tone="danger">Auth user load issue</StatusBadge>
+          ) : null}
         </div>
         <h1 className="text-3xl font-semibold text-ink sm:text-4xl">Admin</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">

@@ -5,6 +5,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { canEditProduction } from "@/lib/roles";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { DayType } from "@/lib/types";
+import { isValidIsoDate } from "@/lib/validation";
 
 type SetupScheduleDayInput = {
   date: string;
@@ -50,8 +51,15 @@ export async function saveMonthSetup(input: SaveMonthSetupInput) {
   }
 
   const scheduleDays = input.scheduleDays
-    .filter((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date))
+    .filter((day) => isValidIsoDate(day.date))
     .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (scheduleDays.some((day) => !day.date.startsWith(input.month))) {
+    return {
+      ok: false,
+      message: "Every scheduled day must fall within the selected month.",
+    };
+  }
 
   const uniqueDates = new Set(scheduleDays.map((day) => day.date));
 
@@ -61,6 +69,24 @@ export async function saveMonthSetup(input: SaveMonthSetupInput) {
 
   const supabase = getSupabaseAdminClient();
   const monthDate = toMonthDate(input.month);
+
+  const { data: existingGoal, error: existingGoalError } = await supabase
+    .from("monthly_goals")
+    .select("closed")
+    .eq("practice_id", currentProfile.practiceId)
+    .eq("month", monthDate)
+    .maybeSingle();
+
+  if (existingGoalError) {
+    return { ok: false, message: existingGoalError.message };
+  }
+
+  if (existingGoal?.closed) {
+    return {
+      ok: false,
+      message: `${input.month} is closed and can no longer be edited.`,
+    };
+  }
   const { error: goalError } = await supabase.from("monthly_goals").upsert(
     {
       practice_id: currentProfile.practiceId,
