@@ -1,17 +1,16 @@
-import { bonusTiers } from "@/lib/seed-data";
-import { money } from "@/lib/bonus-calculations";
+import { money } from "@/lib/format";
 import type { BonusTier } from "@/lib/types";
 
 type TierLadderProps = {
   percentValue: number;
-  tiers?: BonusTier[];
+  tiers: BonusTier[];
   activeThreshold?: number;
   nextThreshold?: number;
 };
 
 export function TierLadder({
   percentValue,
-  tiers = bonusTiers,
+  tiers,
   activeThreshold,
   nextThreshold,
 }: TierLadderProps) {

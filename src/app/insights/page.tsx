@@ -203,7 +203,7 @@ export default async function InsightsPage() {
           tone={ytdVariance >= 0 ? "good" : "danger"}
         />
         <MetricCard
-          title="Month-end forecast"
+          title="YTD forecast"
           value={money(ytdForecast)}
           detail={`${money(Math.abs(forecastVariance))} ${
             forecastVariance >= 0 ? "ahead" : "behind"

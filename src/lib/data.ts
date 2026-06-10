@@ -88,38 +88,73 @@ function monthLabel(month: string) {
   );
 }
 
-function buildQuarters(goals: MonthlyGoal[]) {
-  const quarterMonths = [
-    ["2026-01", "2026-02", "2026-03"],
-    ["2026-04", "2026-05", "2026-06"],
-    ["2026-07", "2026-08", "2026-09"],
-    ["2026-10", "2026-11", "2026-12"],
-  ];
+function buildQuarters(goals: MonthlyGoal[]): Quarter[] {
+  // Derive quarter buckets from whatever goal months exist instead of hardcoding
+  // a single year, so the app keeps working as new years are added.
+  const buckets = new Map<
+    string,
+    { year: number; quarter: number; months: string[] }
+  >();
 
-  return quarterMonths.map((months, index) => {
-    const statuses = months.map(
-      (month) =>
-        goals.find((goal) => goal.month === month)?.profitabilityStatus ??
-        "unknown",
-    );
-    const profitabilityStatus: ProfitabilityStatus = statuses.includes(
-      "unfavorable",
-    )
-      ? "unfavorable"
-      : statuses.every((status) => status === "favorable")
-        ? "favorable"
-        : "unknown";
+  for (const goal of goals) {
+    const [year, monthNumber] = goal.month.split("-").map(Number);
 
-    return {
-      label: `Q${index + 1}`,
-      months,
-      profitabilityStatus,
-    };
-  });
+    if (!Number.isFinite(year) || !Number.isFinite(monthNumber)) {
+      continue;
+    }
+
+    const quarter = Math.floor((monthNumber - 1) / 3) + 1;
+    const key = `${year}-${quarter}`;
+    const bucket = buckets.get(key) ?? { year, quarter, months: [] };
+    bucket.months.push(goal.month);
+    buckets.set(key, bucket);
+  }
+
+  const multipleYears = new Set([...buckets.values()].map((b) => b.year)).size > 1;
+
+  return [...buckets.values()]
+    .sort((a, b) => a.year - b.year || a.quarter - b.quarter)
+    .map((bucket) => {
+      const months = [...bucket.months].sort();
+      const statuses = months.map(
+        (month) =>
+          goals.find((goal) => goal.month === month)?.profitabilityStatus ??
+          "unknown",
+      );
+      const profitabilityStatus: ProfitabilityStatus = statuses.includes(
+        "unfavorable",
+      )
+        ? "unfavorable"
+        : statuses.every((status) => status === "favorable")
+          ? "favorable"
+          : "unknown";
+
+      return {
+        label: multipleYears
+          ? `Q${bucket.quarter} ${bucket.year}`
+          : `Q${bucket.quarter}`,
+        months,
+        profitabilityStatus,
+      };
+    });
+}
+
+function currentPracticeMonth() {
+  // The practice is in Wichita (US Central). Resolve the month in that timezone
+  // so the active month doesn't flip hours early under UTC.
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === "year")?.value ?? "";
+  const month = parts.find((part) => part.type === "month")?.value ?? "";
+
+  return `${year}-${month}`;
 }
 
 export function getActiveMonth(goals: MonthlyGoal[]) {
-  const currentMonth = new Date().toISOString().slice(0, 7);
+  const currentMonth = currentPracticeMonth();
   const matchingOpenGoal = goals.find(
     (goal) => !goal.closed && goal.month === currentMonth,
   );
@@ -128,7 +163,11 @@ export function getActiveMonth(goals: MonthlyGoal[]) {
     return matchingOpenGoal.month;
   }
 
-  return goals.find((goal) => !goal.closed)?.month ?? goals.at(-1)?.month ?? "2026-05";
+  return (
+    goals.find((goal) => !goal.closed)?.month ??
+    goals.at(-1)?.month ??
+    currentMonth
+  );
 }
 
 export async function getPracticeData(): Promise<PracticeData> {
@@ -143,46 +182,38 @@ export async function getPracticeData(): Promise<PracticeData> {
     throw new Error(practiceError.message);
   }
 
-  const [
-    monthlyGoalsResult,
-    monthPlansResult,
-    productionEntriesResult,
-    bonusTiersResult,
-    driveForNineResult,
-  ] = await Promise.all([
-    supabase
-      .from("monthly_goals")
-      .select(
-        "month,s1p_goal,historical_adjusted_actual,official_s1p_actual,closed,profitability_status",
-      )
-      .eq("practice_id", practice.id)
-      .order("month", { ascending: true }),
-    supabase
-      .from("month_plans")
-      .select("id,month,avg_mth_doctor_day,avg_friday_doctor_day,planned_workday_count")
-      .eq("practice_id", practice.id)
-      .order("month", { ascending: true }),
-    supabase
-      .from("production_entries")
-      .select("work_date,total_production,credit_adjustments,note")
-      .eq("practice_id", practice.id)
-      .order("work_date", { ascending: true }),
-    supabase
-      .from("bonus_tiers")
-      .select("threshold_pct,amount")
-      .eq("practice_id", practice.id)
-      .order("threshold_pct", { ascending: true }),
-    supabase
-      .from("drive_for_nine_campaigns")
-      .select("month,active,qualification_pct,result")
-      .eq("practice_id", practice.id)
-      .order("month", { ascending: true }),
-  ]);
+  // These reference tables are small (a handful of rows per year), so they are
+  // safe to read in full. They also tell us which year is active, which then
+  // bounds the larger per-day tables below.
+  const [monthlyGoalsResult, monthPlansResult, bonusTiersResult, driveForNineResult] =
+    await Promise.all([
+      supabase
+        .from("monthly_goals")
+        .select(
+          "month,s1p_goal,historical_adjusted_actual,official_s1p_actual,closed,profitability_status",
+        )
+        .eq("practice_id", practice.id)
+        .order("month", { ascending: true }),
+      supabase
+        .from("month_plans")
+        .select("id,month,avg_mth_doctor_day,avg_friday_doctor_day,planned_workday_count")
+        .eq("practice_id", practice.id)
+        .order("month", { ascending: true }),
+      supabase
+        .from("bonus_tiers")
+        .select("threshold_pct,amount")
+        .eq("practice_id", practice.id)
+        .order("threshold_pct", { ascending: true }),
+      supabase
+        .from("drive_for_nine_campaigns")
+        .select("month,active,qualification_pct,result")
+        .eq("practice_id", practice.id)
+        .order("month", { ascending: true }),
+    ]);
 
   for (const result of [
     monthlyGoalsResult,
     monthPlansResult,
-    productionEntriesResult,
     bonusTiersResult,
     driveForNineResult,
   ]) {
@@ -192,17 +223,43 @@ export async function getPracticeData(): Promise<PracticeData> {
   }
 
   const planRows = (monthPlansResult.data ?? []) as MonthPlanRow[];
-  const scheduleDays =
-    planRows.length > 0
-      ? await supabase
+
+  // Bound the high-volume daily tables to the active year so the default
+  // 1,000-row PostgREST cap can never silently drop the current month's data.
+  // Closed prior-year months read their actuals from monthly_goals, so they do
+  // not depend on these rows.
+  const activeYear = getActiveMonth(
+    ((monthlyGoalsResult.data ?? []) as MonthlyGoalRow[]).map((goal) => ({
+      month: monthId(goal.month),
+      label: "",
+      s1pGoal: 0,
+      closed: goal.closed,
+    })),
+  ).slice(0, 4);
+  const activeYearPlanIds = planRows
+    .filter((plan) => monthId(plan.month).startsWith(activeYear))
+    .map((plan) => plan.id);
+
+  const [productionEntriesResult, scheduleDays] = await Promise.all([
+    supabase
+      .from("production_entries")
+      .select("work_date,total_production,credit_adjustments,note")
+      .eq("practice_id", practice.id)
+      .gte("work_date", `${activeYear}-01-01`)
+      .lte("work_date", `${activeYear}-12-31`)
+      .order("work_date", { ascending: true }),
+    activeYearPlanIds.length > 0
+      ? supabase
           .from("schedule_days")
           .select("month_plan_id,work_date,day_type,doctors,original_doctors,change_reason")
-          .in(
-            "month_plan_id",
-            planRows.map((plan) => plan.id),
-          )
+          .in("month_plan_id", activeYearPlanIds)
           .order("work_date", { ascending: true })
-      : { data: [], error: null };
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (productionEntriesResult.error) {
+    throw new Error(productionEntriesResult.error.message);
+  }
 
   if (scheduleDays.error) {
     throw new Error(scheduleDays.error.message);
