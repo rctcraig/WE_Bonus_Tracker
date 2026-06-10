@@ -1,12 +1,15 @@
 "use client";
 
-import { Plus, Save } from "lucide-react";
+import { Plus, Save, Trash2 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { StatusBadge } from "@/components/status-badge";
 import { adjustedProduction, fullDate, money } from "@/lib/bonus-calculations";
 import type { ProductionEntry } from "@/lib/types";
-import { saveProductionEntries } from "@/app/entry/actions";
+import {
+  deleteProductionEntry,
+  saveProductionEntries,
+} from "@/app/entry/actions";
 
 type DraftEntry = ProductionEntry & {
   id: string;
@@ -154,6 +157,16 @@ export function EntryClient({
       return;
     }
 
+    const dates = rowsToSave.map((row) => row.date);
+
+    if (new Set(dates).size !== dates.length) {
+      setStatus({
+        tone: "danger",
+        message: "Two rows share the same date. Combine them before saving.",
+      });
+      return;
+    }
+
     startTransition(async () => {
       const result = await saveProductionEntries(
         rowsToSave.map((row) => ({
@@ -170,6 +183,37 @@ export function EntryClient({
       });
 
       if (result.ok) {
+        router.refresh();
+      }
+    });
+  }
+
+  function removeRow(row: DraftEntry) {
+    if (!canEditSelectedMonth) {
+      return;
+    }
+
+    if (row.isNew) {
+      setRows((current) => current.filter((item) => item.id !== row.id));
+      return;
+    }
+
+    if (
+      !window.confirm(`Remove the saved entry for ${fullDate(row.date)}?`)
+    ) {
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await deleteProductionEntry(row.date);
+
+      setStatus({
+        tone: result.ok ? "good" : "danger",
+        message: result.message,
+      });
+
+      if (result.ok) {
+        setRows((current) => current.filter((item) => item.id !== row.id));
         router.refresh();
       }
     });
@@ -288,17 +332,19 @@ export function EntryClient({
         </div>
       ) : null}
 
-      {status ? (
-        <div
-          className={
-            status.tone === "good"
-              ? "rounded-lg border border-[#b6d8c4] bg-[#edf7f0] px-4 py-3 text-sm font-medium text-success"
-              : "rounded-lg border border-[#f3bbb5] bg-[#fff0ee] px-4 py-3 text-sm font-medium text-danger"
-          }
-        >
-          {status.message}
-        </div>
-      ) : null}
+      <div role="status" aria-live="polite">
+        {status ? (
+          <div
+            className={
+              status.tone === "good"
+                ? "rounded-lg border border-[#b6d8c4] bg-[#edf7f0] px-4 py-3 text-sm font-medium text-success"
+                : "rounded-lg border border-[#f3bbb5] bg-[#fff0ee] px-4 py-3 text-sm font-medium text-danger"
+            }
+          >
+            {status.message}
+          </div>
+        ) : null}
+      </div>
 
       <section className="rounded-lg border border-line bg-panel shadow-sm">
         <div className="flex flex-col gap-1 border-b border-line p-5 sm:flex-row sm:items-start sm:justify-between">
@@ -337,12 +383,20 @@ export function EntryClient({
                   Adjusted production
                 </th>
                 <th className="px-5 py-3 font-semibold">Note</th>
+                {canEditSelectedMonth ? (
+                  <th className="px-5 py-3 text-right font-semibold">
+                    <span className="sr-only">Actions</span>
+                  </th>
+                ) : null}
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr className="border-t border-line">
-                  <td className="px-5 py-8 text-center text-sm text-muted" colSpan={5}>
+                  <td
+                    className="px-5 py-8 text-center text-sm text-muted"
+                    colSpan={canEditSelectedMonth ? 6 : 5}
+                  >
                     No daily rows recorded for {selectedMonthLabel}.
                   </td>
                 </tr>
@@ -357,7 +411,7 @@ export function EntryClient({
                       id={`${row.id}-date`}
                       type="date"
                       value={row.date}
-                      disabled={!canEditSelectedMonth}
+                      disabled={!canEditSelectedMonth || !row.isNew}
                       onChange={(event) =>
                         updateRow(row.id, "date", event.target.value)
                       }
@@ -365,6 +419,9 @@ export function EntryClient({
                     />
                     <p className="mt-1 text-xs text-muted">
                       {fullDate(row.date)}
+                      {canEditSelectedMonth && !row.isNew
+                        ? " · delete to re-date"
+                        : ""}
                     </p>
                   </td>
                   <td className="px-5 py-3 text-right">
@@ -421,6 +478,19 @@ export function EntryClient({
                       className="h-10 w-full rounded-lg border border-line bg-white px-3 text-ink disabled:bg-background disabled:text-muted"
                     />
                   </td>
+                  {canEditSelectedMonth ? (
+                    <td className="px-5 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => removeRow(row)}
+                        disabled={isPending}
+                        aria-label={`Remove ${fullDate(row.date)} row`}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-line text-muted transition hover:bg-background hover:text-danger disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>

@@ -15,7 +15,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { canViewInsights } from "@/lib/roles";
+import { canInvite, canViewInsights } from "@/lib/roles";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Role } from "@/lib/types";
 
@@ -30,7 +30,7 @@ const links = [
   { href: "/entry", label: "Entry", icon: ClipboardList },
   { href: "/setup", label: "Setup", icon: CalendarDays },
   { href: "/history", label: "History", icon: History },
-  { href: "/admin", label: "Admin", icon: Settings },
+  { href: "/admin", label: "Admin", icon: Settings, showFor: canInvite },
 ];
 
 type AppNavProps = {

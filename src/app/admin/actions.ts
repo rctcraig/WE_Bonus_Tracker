@@ -137,56 +137,11 @@ export async function sendSetupLink(userId: string) {
 
   const email = authUserData.user.email;
   const redirectTo = `${getAppUrl()}/auth/set-password`;
-  const isPendingInvite =
-    !authUserData.user.email_confirmed_at &&
-    !authUserData.user.last_sign_in_at;
 
-  if (isPendingInvite) {
-    const { error: deleteError } = await admin.auth.admin.deleteUser(userId);
-
-    if (deleteError) {
-      return { ok: false, message: deleteError.message };
-    }
-
-    const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-      redirectTo,
-      data: {
-        full_name: targetProfile.full_name,
-        role: targetRole,
-        practice_slug: practiceSlug,
-      },
-    });
-
-    if (error || !data.user) {
-      return {
-        ok: false,
-        message: error?.message ?? "Invite refresh failed.",
-      };
-    }
-
-    const { error: profileError } = await admin.from("profiles").upsert(
-      {
-        user_id: data.user.id,
-        practice_id: targetProfile.practice_id,
-        full_name: targetProfile.full_name,
-        role: targetRole,
-        notifications_enabled: targetProfile.notifications_enabled,
-      },
-      { onConflict: "user_id" },
-    );
-
-    if (profileError) {
-      return { ok: false, message: profileError.message };
-    }
-
-    revalidatePath("/admin");
-
-    return {
-      ok: true,
-      message: `Fresh invite sent to ${email}.`,
-    };
-  }
-
+  // A recovery link sends the user to the set-password flow whether or not they
+  // have confirmed their invite yet. This intentionally avoids deleting and
+  // re-creating the auth user (and its cascading profile row), which could
+  // permanently destroy the account if the follow-up invite failed.
   const { error } = await admin.auth.resetPasswordForEmail(email, {
     redirectTo,
   });
