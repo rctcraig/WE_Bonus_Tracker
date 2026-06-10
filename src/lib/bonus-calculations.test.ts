@@ -103,6 +103,36 @@ describe("summarizeMonth", () => {
     expect(result.forecast).toBe(result.actual);
   });
 
+  it("uses the official S1P actual for a closed month", () => {
+    // February: official 936,157.98 / 862,853.09 = 108.50% (not the internal
+    // 947,129 historical total, which would land a full tier higher).
+    const result = summarizeMonth(
+      goal({
+        s1pGoal: 862853.09,
+        closed: true,
+        officialS1PActual: 936157.98,
+        historicalAdjustedActual: 947129,
+      }),
+    );
+
+    expect(result.actual).toBe(936157.98);
+    expect(result.pctOfGoal).toBeCloseTo(108.5, 1);
+    expect(tierForPercent(tiers, result.pctOfGoal)?.amount).toBe(200);
+  });
+
+  it("keeps the internal historical total for an open month", () => {
+    const result = summarizeMonth(
+      goal({
+        closed: false,
+        officialS1PActual: 999999,
+        historicalAdjustedActual: 90000,
+      }),
+    );
+
+    // Open months must not adopt the closed-scoreboard official actual.
+    expect(result.actual).toBe(90000);
+  });
+
   it("guards against a zero goal", () => {
     const result = summarizeMonth(goal({ s1pGoal: 0 }), undefined, []);
     expect(result.pctOfGoal).toBe(0);

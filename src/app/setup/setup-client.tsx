@@ -13,7 +13,7 @@ import { useMemo, useState, useTransition } from "react";
 import { saveMonthSetup } from "@/app/setup/actions";
 import { MetricCard } from "@/components/metric-card";
 import { StatusBadge } from "@/components/status-badge";
-import { adjustedProduction, fullDate, money } from "@/lib/bonus-calculations";
+import { adjustedProduction, fullDate, money } from "@/lib/format";
 import type {
   DayType,
   MonthPlan,

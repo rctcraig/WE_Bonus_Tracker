@@ -238,6 +238,25 @@ export default async function Home() {
     extraPerRemainingDoctorDay * quarterRallyWindow.mthDoctors;
   const fridayExtra =
     extraPerRemainingDoctorDay * quarterRallyWindow.fridayDoctors;
+  const profitabilityTone =
+    currentQuarter.profitabilityStatus === "favorable"
+      ? "good"
+      : currentQuarter.profitabilityStatus === "unfavorable"
+        ? "danger"
+        : "warning";
+  const profitabilityLabel =
+    currentQuarter.profitabilityStatus === "favorable"
+      ? "profitability favorable"
+      : currentQuarter.profitabilityStatus === "unfavorable"
+        ? "profitability unfavorable"
+        : "profitability pending";
+  const scheduleChangeDays = (currentMonthPlan?.scheduledDays ?? []).filter(
+    (day) => day.changeReason,
+  );
+  const plannedDatesCount =
+    currentMonthPlan?.scheduledDays.length ??
+    currentMonthPlan?.plannedWorkdayCount ??
+    0;
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -245,16 +264,26 @@ export default async function Home() {
         <div>
           <div className="mb-3 flex flex-wrap gap-2">
             <StatusBadge tone="neutral">{monthGoal.label} open</StatusBadge>
-            <StatusBadge tone="good">Q1 paid tier tracked</StatusBadge>
-            <StatusBadge tone="warning">Q2 profitability pending</StatusBadge>
+            <StatusBadge tone="neutral">
+              {currentQuarter.label} staff bonus tracked
+            </StatusBadge>
+            <StatusBadge tone={profitabilityTone}>
+              {currentQuarter.label} {profitabilityLabel}
+            </StatusBadge>
           </div>
           <h1 className="max-w-3xl text-3xl font-semibold text-ink sm:text-4xl">
             Daily production progress
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted sm:text-base">
             Adjusted production is calculated from total production minus credit
-            adjustments. {monthGoal.label} includes the doctor-out schedule
-            change on May 19.
+            adjustments.
+            {scheduleChangeDays.length > 0
+              ? ` ${monthGoal.label} includes ${scheduleChangeDays.length} schedule ${
+                  scheduleChangeDays.length === 1 ? "change" : "changes"
+                } (${scheduleChangeDays[0].changeReason} on ${compactDate(
+                  scheduleChangeDays[0].date,
+                )}).`
+              : ""}
           </p>
         </div>
         <div className="rounded-lg border border-line bg-panel px-4 py-3 shadow-sm">
@@ -304,7 +333,7 @@ export default async function Home() {
             currentDriveForNineSummary.active
               ? `${money(
                   currentDriveForNineSummary.toQualify,
-                )} needed to reach 115%`
+                )} needed to reach ${currentDriveForNineSummary.qualificationPct}%`
               : nextDriveForNine
                 ? `Next active campaign is ${getMonthGoalFromData(
                     data.monthlyGoals,
@@ -393,13 +422,21 @@ export default async function Home() {
         <div className="rounded-lg border-2 border-success bg-panel p-5 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-ink">Q2 staff bonus</h2>
+              <h2 className="text-lg font-semibold text-ink">
+                {currentQuarter.label} staff bonus
+              </h2>
               <p className="text-sm text-muted">
                 Projected from entered actuals, open-month forecasts, and S1P
                 goals for future months until setup is entered.
               </p>
             </div>
-            <StatusBadge tone="warning">Profitability unknown</StatusBadge>
+            <StatusBadge tone={profitabilityTone}>
+              {currentQuarter.profitabilityStatus === "favorable"
+                ? "Profitability favorable"
+                : currentQuarter.profitabilityStatus === "unfavorable"
+                  ? "Profitability unfavorable"
+                  : "Profitability unknown"}
+            </StatusBadge>
           </div>
           <div className="mt-5 rounded-lg bg-[#edf7f0] p-4">
             <p className="text-xs font-medium uppercase tracking-[0.08em] text-success">
@@ -420,7 +457,8 @@ export default async function Home() {
                 : "Build toward the 97% threshold"}
             </p>
             <p className="mt-1 text-sm text-muted">
-              Projected Q2: {money(currentQuarterProjection.projected)} (
+              Projected {currentQuarter.label}:{" "}
+              {money(currentQuarterProjection.projected)} (
               {percent(currentQuarterProjection.projectedPct)})
             </p>
           </div>
@@ -440,9 +478,9 @@ export default async function Home() {
                 {quarterRallyWindow.fridayDoctors}-doctor Friday.
               </p>
               <p className="mt-2 text-sm text-muted">
-                Spread across {quarterRallyWindow.totalDoctorDays} remaining Q2
-                doctor-days, that closes the {money(nextQuarterTierGap)} gap to
-                the{" "}
+                Spread across {quarterRallyWindow.totalDoctorDays} remaining{" "}
+                {currentQuarter.label} doctor-days, that closes the{" "}
+                {money(nextQuarterTierGap)} gap to the{" "}
                 {nextQuarterTier.thresholdPct.toFixed(0)}% tier (
                 {money(nextQuarterTier.amount)}).
               </p>
@@ -470,7 +508,8 @@ export default async function Home() {
           )}
 
           <p className="mt-4 text-sm text-muted">
-            Q2 actual entered so far: {money(currentQuarterSummary.actual)} of{" "}
+            {currentQuarter.label} actual entered so far:{" "}
+            {money(currentQuarterSummary.actual)} of{" "}
             {money(currentQuarterSummary.goal)} (
             {percent(currentQuarterSummary.pct)}).
           </p>
@@ -499,7 +538,8 @@ export default async function Home() {
           </div>
           <StatusBadge tone="good">
             <CheckCircle2 className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-            20 planned dates cross-checked
+            {plannedDatesCount} planned{" "}
+            {plannedDatesCount === 1 ? "date" : "dates"} cross-checked
           </StatusBadge>
         </div>
         <div className="divide-y divide-line md:hidden">

@@ -1,11 +1,10 @@
 import {
-  bonusTiers,
-  driveForNineCampaigns,
-  mayProductionEntries,
-  monthPlans,
-  monthlyGoals,
-  quarters,
-} from "@/lib/seed-data";
+  adjustedProduction,
+  compactDate,
+  fullDate,
+  money,
+  percent,
+} from "@/lib/format";
 import type {
   BonusTier,
   DriveForNineCampaign,
@@ -16,73 +15,10 @@ import type {
   ScheduleDay,
 } from "@/lib/types";
 
-export const activeMonth = "2026-05";
-
-export function adjustedProduction(entry: ProductionEntry) {
-  return entry.totalProduction - entry.creditAdjustments;
-}
-
-export function money(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(Math.round(value));
-}
-
-export function percent(value: number, decimals = 1) {
-  return `${value.toFixed(decimals)}%`;
-}
-
-export function compactDate(date: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-  }).format(new Date(`${date}T12:00:00`));
-}
-
-export function fullDate(date: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  }).format(new Date(`${date}T12:00:00`));
-}
-
-export function getMonthGoal(month: string) {
-  const goal = monthlyGoals.find((item) => item.month === month);
-
-  if (!goal) {
-    throw new Error(`Missing goal for ${month}`);
-  }
-
-  return goal;
-}
-
-export function getMonthPlan(month: string) {
-  return monthPlans.find((item) => item.month === month);
-}
-
-export function getQuarterForMonth(month: string) {
-  const quarter = quarters.find((item) => item.months.includes(month));
-
-  if (!quarter) {
-    throw new Error(`Missing quarter for ${month}`);
-  }
-
-  return quarter;
-}
-
-export function getDriveForNineCampaign(month: string) {
-  return (
-    driveForNineCampaigns.find((item) => item.month === month) ?? {
-      month,
-      active: false,
-      qualificationPct: 115,
-      result: "not_active",
-    }
-  );
-}
+// Re-exported so existing callers can keep importing formatters from here.
+// The implementations live in @/lib/format (which is seed-data-free, so client
+// bundles that only need formatting never pull in the seed dataset).
+export { adjustedProduction, compactDate, fullDate, money, percent };
 
 export function getMonthGoalFromData(goals: MonthlyGoal[], month: string) {
   const goal = goals.find((item) => item.month === month);
@@ -152,7 +88,14 @@ export function summarizeMonth(
     (sum, entry) => sum + adjustedProduction(entry),
     0,
   );
-  const actual = goal.historicalAdjustedActual ?? entryTotal;
+  // The official S1P actual is the scoreboard the bonus pays on, so prefer it
+  // for closed months. Open months fall back to the internal historical total
+  // or the sum of entered daily production.
+  const actual = goal.closed
+    ? goal.officialS1PActual ??
+      goal.historicalAdjustedActual ??
+      entryTotal
+    : goal.historicalAdjustedActual ?? entryTotal;
   const pctOfGoal = goal.s1pGoal > 0 ? (actual / goal.s1pGoal) * 100 : 0;
   const enteredDates = new Set(entries.map((entry) => entry.date));
   const expectedThroughEntries =
@@ -203,35 +146,6 @@ export function nextTierForPercent(tiers: BonusTier[], pct: number) {
   return tiers
     .filter((tier) => pct < tier.thresholdPct)
     .sort((a, b) => a.thresholdPct - b.thresholdPct)[0];
-}
-
-export function summarizeQuarter(quarter: Quarter) {
-  const goals = quarter.months.map(getMonthGoal);
-  const goal = goals.reduce((sum, item) => sum + item.s1pGoal, 0);
-  const actual = goals.reduce(
-    (sum, item) =>
-      sum +
-      summarizeMonth(
-        item,
-        getMonthPlan(item.month),
-        item.month === "2026-05" ? mayProductionEntries : [],
-      ).actual,
-    0,
-  );
-  const pct = goal > 0 ? (actual / goal) * 100 : 0;
-  const tier = tierForPercent(bonusTiers, pct);
-  const nextTier = nextTierForPercent(bonusTiers, pct);
-
-  return {
-    actual,
-    goal,
-    label: quarter.label,
-    months: quarter.months,
-    nextTier,
-    pct,
-    profitabilityStatus: quarter.profitabilityStatus,
-    tier,
-  };
 }
 
 export function summarizeQuarterFromData(
@@ -347,18 +261,3 @@ export function summarizeDriveForNine(
     toQualify: Math.max(threshold - monthSummary.actual, 0),
   };
 }
-
-export const currentMonthSummary = summarizeMonth(
-  getMonthGoal(activeMonth),
-  getMonthPlan(activeMonth),
-  mayProductionEntries,
-);
-
-export const currentQuarterSummary = summarizeQuarter(
-  getQuarterForMonth(activeMonth),
-);
-
-export const currentDriveForNineSummary = summarizeDriveForNine(
-  getDriveForNineCampaign(activeMonth),
-  currentMonthSummary,
-);

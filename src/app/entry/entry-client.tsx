@@ -4,7 +4,7 @@ import { Plus, Save, Trash2 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { StatusBadge } from "@/components/status-badge";
-import { adjustedProduction, fullDate, money } from "@/lib/bonus-calculations";
+import { adjustedProduction, fullDate, money } from "@/lib/format";
 import type { ProductionEntry } from "@/lib/types";
 import {
   deleteProductionEntry,

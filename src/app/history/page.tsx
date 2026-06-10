@@ -17,6 +17,17 @@ export const dynamic = "force-dynamic";
 export default async function HistoryPage() {
   await requireCurrentProfile();
   const data = await getPracticeData();
+  const years = [
+    ...new Set(data.monthlyGoals.map((goal) => goal.month.slice(0, 4))),
+  ].sort();
+  const yearLabel = years.length > 0 ? years.join(", ") : "All time";
+  const wonCampaign = data.driveForNineCampaigns.find(
+    (campaign) => campaign.result === "won",
+  );
+  const wonCampaignLabel = wonCampaign
+    ? (data.monthlyGoals.find((goal) => goal.month === wonCampaign.month)
+        ?.label ?? wonCampaign.month)
+    : null;
   const rows = data.monthlyGoals.map((goal) => {
     const entries = data.productionEntries.filter((entry) =>
       entry.date.startsWith(goal.month),
@@ -38,8 +49,12 @@ export default async function HistoryPage() {
     <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
       <section className="border-b border-line pb-6">
         <div className="mb-3 flex gap-2">
-          <StatusBadge tone="neutral">2026</StatusBadge>
-          <StatusBadge tone="good">April Drive for Nine won</StatusBadge>
+          <StatusBadge tone="neutral">{yearLabel}</StatusBadge>
+          {wonCampaignLabel ? (
+            <StatusBadge tone="good">
+              {wonCampaignLabel} Drive for Nine won
+            </StatusBadge>
+          ) : null}
         </div>
         <h1 className="text-3xl font-semibold text-ink sm:text-4xl">
           History
