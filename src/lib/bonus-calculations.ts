@@ -98,16 +98,23 @@ export function summarizeMonth(
     : goal.historicalAdjustedActual ?? entryTotal;
   const pctOfGoal = goal.s1pGoal > 0 ? (actual / goal.s1pGoal) * 100 : 0;
   const enteredDates = new Set(entries.map((entry) => entry.date));
+  // A month with a historical monthly total (or a closed month) is already
+  // fully realized: `actual` is the final number. Counting its scheduled days
+  // as "remaining" would add a whole month of capacity on top of that total
+  // and roughly double the forecast, so there is nothing left to expect.
+  const fullyRealized =
+    goal.closed || typeof goal.historicalAdjustedActual === "number";
   const expectedThroughEntries =
     plan?.scheduledDays
       .filter((day) => enteredDates.has(day.date))
       .reduce((sum, day) => sum + expectedForScheduleDay(day, plan), 0) ?? 0;
-  const remainingSchedule =
-    plan?.scheduledDays.filter((day) => !enteredDates.has(day.date)) ?? [];
-  const remainingExpected =
-    plan?.scheduledDays
-      .filter((day) => !enteredDates.has(day.date))
-      .reduce((sum, day) => sum + expectedForScheduleDay(day, plan), 0) ?? 0;
+  const remainingSchedule = fullyRealized
+    ? []
+    : (plan?.scheduledDays.filter((day) => !enteredDates.has(day.date)) ?? []);
+  const remainingExpected = remainingSchedule.reduce(
+    (sum, day) => sum + (plan ? expectedForScheduleDay(day, plan) : 0),
+    0,
+  );
   const currentExpected =
     plan?.scheduledDays.reduce(
       (sum, day) => sum + expectedForScheduleDay(day, plan),
@@ -119,7 +126,7 @@ export function summarizeMonth(
       0,
     ) ?? currentExpected;
   const scheduleChangeImpact = currentExpected - originalExpected;
-  const forecast = goal.closed ? actual : actual + remainingExpected;
+  const forecast = fullyRealized ? actual : actual + remainingExpected;
 
   return {
     actual,

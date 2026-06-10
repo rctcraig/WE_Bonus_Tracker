@@ -133,6 +133,33 @@ describe("summarizeMonth", () => {
     expect(result.actual).toBe(90000);
   });
 
+  it("does not double-count an open month that has a historical total and a plan", () => {
+    const plan: MonthPlan = {
+      month: "2026-05",
+      plannedWorkdayCount: 2,
+      plannedProductionDates: ["2026-05-04", "2026-05-05"],
+      avgMthDoctorDay: 20000,
+      avgFridayDoctorDay: 10000,
+      scheduledDays: [
+        { date: "2026-05-04", dayType: "mth", doctors: 6 },
+        { date: "2026-05-05", dayType: "mth", doctors: 6 },
+      ],
+    };
+
+    // Open month, monthly import, no daily rows entered: every scheduled day
+    // would otherwise be treated as "remaining" and inflate the forecast.
+    const result = summarizeMonth(
+      goal({ closed: false, historicalAdjustedActual: 250000 }),
+      plan,
+      [],
+    );
+
+    expect(result.actual).toBe(250000);
+    expect(result.remainingExpected).toBe(0);
+    expect(result.remainingSchedule).toHaveLength(0);
+    expect(result.forecast).toBe(250000);
+  });
+
   it("guards against a zero goal", () => {
     const result = summarizeMonth(goal({ s1pGoal: 0 }), undefined, []);
     expect(result.pctOfGoal).toBe(0);

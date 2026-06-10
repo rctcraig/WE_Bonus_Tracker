@@ -3,7 +3,6 @@
 import clsx from "clsx";
 import {
   BarChart3,
-  Bell,
   CalendarDays,
   ClipboardList,
   Gauge,
@@ -101,16 +100,9 @@ export function AppNav({ role }: AppNavProps) {
 
         {isAuthPath ? null : (
           <>
-            <button
-              type="button"
-              className="ml-auto flex h-10 w-10 items-center justify-center rounded-lg border border-line text-muted transition hover:bg-background hover:text-ink md:ml-1"
-              aria-label="Notification settings"
-            >
-              <Bell className="h-4 w-4" aria-hidden="true" />
-            </button>
             <Link
               href="/account"
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-line text-muted transition hover:bg-background hover:text-ink"
+              className="ml-auto flex h-10 w-10 items-center justify-center rounded-lg border border-line text-muted transition hover:bg-background hover:text-ink md:ml-1"
               aria-label="Account"
               title="Account"
             >
