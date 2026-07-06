@@ -1,4 +1,13 @@
 import { Lock, Trophy } from "lucide-react";
+import {
+  DriveForNinePanel,
+  type DriveForNineOption,
+} from "@/app/history/drive-for-nine-panel";
+import {
+  MonthClosePanel,
+  type CloseMonthOption,
+} from "@/app/history/month-close-panel";
+import { ProfitabilityControl } from "@/app/history/profitability-control";
 import { StatusBadge } from "@/components/status-badge";
 import {
   getDriveForNineCampaignFromData,
@@ -11,11 +20,14 @@ import {
 } from "@/lib/bonus-calculations";
 import { requireCurrentProfile } from "@/lib/auth";
 import { getPracticeData } from "@/lib/data";
+import { canEditProduction, canReopenMonth } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
 export default async function HistoryPage() {
-  await requireCurrentProfile();
+  const currentProfile = await requireCurrentProfile();
+  const canManageMonths = canEditProduction(currentProfile.role);
+  const canSetProfitability = canManageMonths;
   const data = await getPracticeData();
   const years = [
     ...new Set(data.monthlyGoals.map((goal) => goal.month.slice(0, 4))),
@@ -44,6 +56,33 @@ export default async function HistoryPage() {
 
     return { drive, goal, summary };
   });
+  const closeMonthOptions: CloseMonthOption[] = rows.map(
+    ({ goal, summary }) => ({
+      month: goal.month,
+      label: goal.label,
+      closed: goal.closed,
+      s1pGoal: goal.s1pGoal,
+      suggestedActual: summary.actual,
+      officialS1PActual: goal.officialS1PActual,
+      closeNote: goal.closeNote,
+      closedAt: goal.closedAt,
+    }),
+  );
+  const driveForNineOptions: DriveForNineOption[] = data.monthlyGoals.map(
+    (goal) => {
+      const campaign = getDriveForNineCampaignFromData(
+        data.driveForNineCampaigns,
+        goal.month,
+      );
+
+      return {
+        month: goal.month,
+        label: goal.label,
+        active: campaign.active,
+        result: campaign.result,
+      };
+    },
+  );
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -92,10 +131,16 @@ export default async function HistoryPage() {
                   tone={
                     summary.profitabilityStatus === "favorable"
                       ? "good"
-                      : "warning"
+                      : summary.profitabilityStatus === "unfavorable"
+                        ? "danger"
+                        : "warning"
                   }
                 >
-                  {summary.profitabilityStatus}
+                  {summary.profitabilityStatus === "favorable"
+                    ? "Favorable"
+                    : summary.profitabilityStatus === "unfavorable"
+                      ? "Unfavorable"
+                      : "Pending"}
                 </StatusBadge>
               </div>
               <p className="mt-3 text-sm text-muted">
@@ -106,10 +151,27 @@ export default async function HistoryPage() {
                   ? `${money(summary.tier.amount)} estimated tier`
                   : "No tier reached"}
               </p>
+              {canSetProfitability ? (
+                <ProfitabilityControl
+                  label={quarter.label}
+                  months={quarter.months}
+                  status={quarter.profitabilityStatus}
+                />
+              ) : null}
             </div>
           );
         })}
       </section>
+
+      {canManageMonths ? (
+        <section className="grid gap-4 lg:grid-cols-2">
+          <MonthClosePanel
+            canReopen={canReopenMonth(currentProfile.role)}
+            months={closeMonthOptions}
+          />
+          <DriveForNinePanel options={driveForNineOptions} />
+        </section>
+      ) : null}
 
       <section className="rounded-lg border border-line bg-panel shadow-sm">
         <div className="overflow-x-auto">

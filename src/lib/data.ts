@@ -24,6 +24,8 @@ type MonthlyGoalRow = {
   official_s1p_actual: string | number | null;
   closed: boolean;
   profitability_status: ProfitabilityStatus;
+  close_note: string | null;
+  closed_at: string | null;
 };
 
 type MonthPlanRow = {
@@ -190,7 +192,7 @@ export async function getPracticeData(): Promise<PracticeData> {
       supabase
         .from("monthly_goals")
         .select(
-          "month,s1p_goal,historical_adjusted_actual,official_s1p_actual,closed,profitability_status",
+          "month,s1p_goal,historical_adjusted_actual,official_s1p_actual,closed,profitability_status,close_note,closed_at",
         )
         .eq("practice_id", practice.id)
         .order("month", { ascending: true }),
@@ -275,6 +277,8 @@ export async function getPracticeData(): Promise<PracticeData> {
       officialS1PActual: toNumber(goal.official_s1p_actual),
       historicalAdjustedActual: toNumber(goal.historical_adjusted_actual),
       profitabilityStatus: goal.profitability_status,
+      closeNote: goal.close_note ?? undefined,
+      closedAt: goal.closed_at ?? undefined,
     }),
   );
   const monthPlans = planRows.map((plan): MonthPlan => {
