@@ -28,12 +28,15 @@ function toMonthDate(month: string) {
   return `${month}-01`;
 }
 
-function cleanMoney(value: number) {
-  return Number.isFinite(value) && value >= 0 ? Math.round(value) : 0;
+// Round to cents rather than whole dollars; the columns are numeric(12,2) and
+// goals carry cents. Invalid values are rejected with a message instead of
+// being coerced to 0, which could silently wipe out a goal on a typo.
+function toCents(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
-function cleanDoctorCount(value: number) {
-  return Number.isFinite(value) && value >= 0 ? value : 0;
+function isNonNegativeNumber(value: number) {
+  return Number.isFinite(value) && value >= 0;
 }
 
 export async function saveMonthSetup(input: SaveMonthSetupInput) {
@@ -50,9 +53,40 @@ export async function saveMonthSetup(input: SaveMonthSetupInput) {
     return { ok: false, message: "Choose a valid month." };
   }
 
+  if (!isNonNegativeNumber(input.s1pGoal)) {
+    return { ok: false, message: "The S1P goal must be zero or more." };
+  }
+
+  if (
+    !isNonNegativeNumber(input.avgMthDoctorDay) ||
+    !isNonNegativeNumber(input.avgFridayDoctorDay)
+  ) {
+    return {
+      ok: false,
+      message: "Average doctor-day amounts must be zero or more.",
+    };
+  }
+
+  if (!isNonNegativeNumber(input.plannedWorkdayCount)) {
+    return { ok: false, message: "Planned workdays must be zero or more." };
+  }
+
   const scheduleDays = input.scheduleDays
     .filter((day) => isValidIsoDate(day.date))
     .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (
+    scheduleDays.some(
+      (day) =>
+        !isNonNegativeNumber(day.doctors) ||
+        !isNonNegativeNumber(day.originalDoctors),
+    )
+  ) {
+    return {
+      ok: false,
+      message: "Doctor counts for each scheduled day must be zero or more.",
+    };
+  }
 
   if (scheduleDays.some((day) => !day.date.startsWith(input.month))) {
     return {
@@ -91,7 +125,7 @@ export async function saveMonthSetup(input: SaveMonthSetupInput) {
     {
       practice_id: currentProfile.practiceId,
       month: monthDate,
-      s1p_goal: cleanMoney(input.s1pGoal),
+      s1p_goal: toCents(input.s1pGoal),
     },
     { onConflict: "practice_id,month" },
   );
@@ -106,8 +140,8 @@ export async function saveMonthSetup(input: SaveMonthSetupInput) {
       {
         practice_id: currentProfile.practiceId,
         month: monthDate,
-        avg_mth_doctor_day: cleanMoney(input.avgMthDoctorDay),
-        avg_friday_doctor_day: cleanMoney(input.avgFridayDoctorDay),
+        avg_mth_doctor_day: toCents(input.avgMthDoctorDay),
+        avg_friday_doctor_day: toCents(input.avgFridayDoctorDay),
         planned_workday_count: Math.max(
           Math.round(input.plannedWorkdayCount),
           0,
@@ -122,30 +156,44 @@ export async function saveMonthSetup(input: SaveMonthSetupInput) {
     return { ok: false, message: planError?.message ?? "Plan save failed." };
   }
 
-  const { error: deleteError } = await supabase
-    .from("schedule_days")
-    .delete()
-    .eq("month_plan_id", plan.id);
-
-  if (deleteError) {
-    return { ok: false, message: deleteError.message };
-  }
-
+  // Upsert first and prune afterwards so a failure partway through never
+  // leaves the month without its schedule (the old delete-then-insert could
+  // wipe every day if the insert failed).
   if (scheduleDays.length > 0) {
-    const { error: insertError } = await supabase.from("schedule_days").insert(
+    const { error: upsertError } = await supabase.from("schedule_days").upsert(
       scheduleDays.map((day) => ({
         month_plan_id: plan.id,
         work_date: day.date,
         day_type: day.dayType,
-        doctors: cleanDoctorCount(day.doctors),
-        original_doctors: cleanDoctorCount(day.originalDoctors),
+        doctors: day.doctors,
+        original_doctors: day.originalDoctors,
         change_reason: day.changeReason?.trim() || null,
       })),
+      { onConflict: "month_plan_id,work_date" },
     );
 
-    if (insertError) {
-      return { ok: false, message: insertError.message };
+    if (upsertError) {
+      return { ok: false, message: upsertError.message };
     }
+  }
+
+  let pruneQuery = supabase
+    .from("schedule_days")
+    .delete()
+    .eq("month_plan_id", plan.id);
+
+  if (scheduleDays.length > 0) {
+    pruneQuery = pruneQuery.not(
+      "work_date",
+      "in",
+      `(${scheduleDays.map((day) => day.date).join(",")})`,
+    );
+  }
+
+  const { error: pruneError } = await pruneQuery;
+
+  if (pruneError) {
+    return { ok: false, message: pruneError.message };
   }
 
   revalidatePath("/");

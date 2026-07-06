@@ -16,6 +16,14 @@ export function canEditProduction(role: Role) {
   return role === "admin" || role === "manager";
 }
 
+export function canCloseMonth(role: Role) {
+  return role === "admin" || role === "manager";
+}
+
+export function canReopenMonth(role: Role) {
+  return role === "admin";
+}
+
 export function canViewInsights(role: Role) {
   return role === "admin" || role === "manager" || role === "doctor";
 }

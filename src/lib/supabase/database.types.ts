@@ -223,6 +223,34 @@ export type Database = {
         >;
         Relationships: [];
       };
+      audit_events: {
+        Row: {
+          id: string;
+          practice_id: string;
+          actor_user_id: string | null;
+          event_type: string;
+          table_name: string;
+          record_id: string | null;
+          reason: string | null;
+          before_data: Json | null;
+          after_data: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          practice_id: string;
+          actor_user_id?: string | null;
+          event_type: string;
+          table_name: string;
+          record_id?: string | null;
+          reason?: string | null;
+          before_data?: Json | null;
+          after_data?: Json | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["audit_events"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

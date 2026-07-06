@@ -24,6 +24,8 @@ export type MonthlyGoal = {
   profitabilityStatus?: ProfitabilityStatus;
   officialS1PActual?: number;
   historicalAdjustedActual?: number;
+  closeNote?: string;
+  closedAt?: string;
 };
 
 export type DriveForNineCampaign = {
