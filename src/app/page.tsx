@@ -6,6 +6,7 @@ import {
   LineChart,
   TrendingUp,
 } from "lucide-react";
+import Link from "next/link";
 import { MetricCard } from "@/components/metric-card";
 import { ProgressBar } from "@/components/progress-bar";
 import { StatusBadge } from "@/components/status-badge";
@@ -170,6 +171,32 @@ function getQuarterRallyWindow({
 export default async function Home() {
   await requireCurrentProfile();
   const data = await getPracticeData();
+
+  // A fresh database has no monthly goals yet; every summary below assumes at
+  // least one, so point at Setup instead of crashing with "Missing goal".
+  if (data.monthlyGoals.length === 0) {
+    return (
+      <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+        <section className="rounded-lg border border-line bg-panel p-8 text-center shadow-sm">
+          <h1 className="text-2xl font-semibold text-ink">
+            No months set up yet
+          </h1>
+          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted">
+            The tracker needs at least one month with an S1P goal before it can
+            show production progress. An admin or office manager can add the
+            first month from the Setup page.
+          </p>
+          <Link
+            href="/setup"
+            className="mt-6 inline-flex h-11 items-center justify-center rounded-lg bg-ink px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#3a332b]"
+          >
+            Go to Setup
+          </Link>
+        </section>
+      </main>
+    );
+  }
+
   const activeMonth = getActiveMonth(data.monthlyGoals);
   const monthGoal = getMonthGoalFromData(data.monthlyGoals, activeMonth);
   const currentMonthPlan = getMonthPlanFromData(data.monthPlans, activeMonth);
