@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   Activity,
@@ -53,12 +54,14 @@ function monthRows(
   plans: MonthPlan[],
   entries: ProductionEntry[],
   activeMonth: string,
+  year: string,
 ) {
-  const currentYear = activeMonth.slice(0, 4);
-
   return goals
-    .filter((goal) => goal.month.startsWith(currentYear))
-    .filter((goal) => goal.month <= activeMonth)
+    .filter((goal) => goal.month.startsWith(year))
+    // Prior years show every month; the active year stops at the open month.
+    .filter(
+      (goal) => year < activeMonth.slice(0, 4) || goal.month <= activeMonth,
+    )
     .map((goal): MonthInsight => {
       const monthEntries = entries.filter((entry) =>
         entry.date.startsWith(goal.month),
@@ -113,7 +116,11 @@ function cumulativePoints(
     .join(" ");
 }
 
-export default async function InsightsPage() {
+export default async function InsightsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ year?: string }>;
+}) {
   const profile = await requireCurrentProfile();
 
   if (!canViewInsights(profile.role)) {
@@ -121,17 +128,27 @@ export default async function InsightsPage() {
   }
 
   const data = await getPracticeData();
+  const params = await searchParams;
   const activeMonth = getActiveMonth(data.monthlyGoals);
+  const activeYear = activeMonth.slice(0, 4);
+  const years = [
+    ...new Set(data.monthlyGoals.map((goal) => goal.month.slice(0, 4))),
+  ].sort();
+  const selectedYear =
+    params.year && years.includes(params.year) ? params.year : activeYear;
   const rows = monthRows(
     data.monthlyGoals,
     data.monthPlans,
     data.productionEntries,
     activeMonth,
+    selectedYear,
   );
   const ytdGoal = rows.reduce((sum, row) => sum + row.goal, 0);
   const ytdActual = rows.reduce((sum, row) => sum + row.actual, 0);
   const ytdForecast = rows.reduce((sum, row) => sum + row.forecast, 0);
-  const annualGoal = data.monthlyGoals.reduce((sum, goal) => sum + goal.s1pGoal, 0);
+  const annualGoal = data.monthlyGoals
+    .filter((goal) => goal.month.startsWith(selectedYear))
+    .reduce((sum, goal) => sum + goal.s1pGoal, 0);
   const ytdPct = ytdGoal > 0 ? (ytdActual / ytdGoal) * 100 : 0;
   const ytdForecastPct = ytdGoal > 0 ? (ytdForecast / ytdGoal) * 100 : 0;
   const ytdVariance = ytdActual - ytdGoal;
@@ -160,14 +177,33 @@ export default async function InsightsPage() {
     <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
       <section className="flex flex-col gap-4 border-b border-line pb-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="mb-3 flex flex-wrap gap-2">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
             <StatusBadge tone="neutral">Management view</StatusBadge>
             <StatusBadge tone={forecastVariance >= 0 ? "good" : "warning"}>
               {forecastVariance >= 0 ? "Tracking ahead" : "Tracking behind"}
             </StatusBadge>
             <StatusBadge tone="neutral">
-              Through {currentMonth?.label ?? "YTD"}
+              Through {currentMonth?.label ?? "YTD"} {selectedYear}
             </StatusBadge>
+            {years.length > 1 ? (
+              <span className="inline-flex gap-1">
+                {years.map((year) => (
+                  <Link
+                    key={year}
+                    href={
+                      year === activeYear ? "/insights" : `/insights?year=${year}`
+                    }
+                    className={
+                      year === selectedYear
+                        ? "rounded-lg bg-ink px-2.5 py-1 text-xs font-semibold text-white"
+                        : "rounded-lg border border-line bg-panel px-2.5 py-1 text-xs font-semibold text-muted transition hover:bg-background hover:text-ink"
+                    }
+                  >
+                    {year}
+                  </Link>
+                ))}
+              </span>
+            ) : null}
           </div>
           <h1 className="text-3xl font-semibold text-ink sm:text-4xl">
             YTD production insights

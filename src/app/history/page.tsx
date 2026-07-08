@@ -1,4 +1,4 @@
-import { Lock, Trophy } from "lucide-react";
+import { Download, Lock, Trophy } from "lucide-react";
 import {
   DriveForNinePanel,
   type DriveForNineOption,
@@ -53,8 +53,20 @@ export default async function HistoryPage() {
       getDriveForNineCampaignFromData(data.driveForNineCampaigns, goal.month),
       summary,
     );
+    // How far the official S1P number landed from our internal tracking. A
+    // persistent gap means the doctor-day averages feeding every forecast are
+    // miscalibrated.
+    const internalActual =
+      goal.historicalAdjustedActual ??
+      (entries.length > 0 ? summary.entryTotal : undefined);
+    const officialDrift =
+      goal.closed &&
+      typeof goal.officialS1PActual === "number" &&
+      typeof internalActual === "number"
+        ? goal.officialS1PActual - internalActual
+        : undefined;
 
-    return { drive, goal, summary };
+    return { drive, goal, officialDrift, summary };
   });
   const closeMonthOptions: CloseMonthOption[] = rows.map(
     ({ goal, summary }) => ({
@@ -86,21 +98,39 @@ export default async function HistoryPage() {
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-      <section className="border-b border-line pb-6">
-        <div className="mb-3 flex gap-2">
-          <StatusBadge tone="neutral">{yearLabel}</StatusBadge>
-          {wonCampaignLabel ? (
-            <StatusBadge tone="good">
-              {wonCampaignLabel} Drive for Nine won
-            </StatusBadge>
-          ) : null}
+      <section className="flex flex-col gap-4 border-b border-line pb-6 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div className="mb-3 flex gap-2">
+            <StatusBadge tone="neutral">{yearLabel}</StatusBadge>
+            {wonCampaignLabel ? (
+              <StatusBadge tone="good">
+                {wonCampaignLabel} Drive for Nine won
+              </StatusBadge>
+            ) : null}
+          </div>
+          <h1 className="text-3xl font-semibold text-ink sm:text-4xl">
+            History
+          </h1>
+          <p className="mt-2 text-sm text-muted">
+            Closed months stay locked unless an admin records a change note.
+          </p>
         </div>
-        <h1 className="text-3xl font-semibold text-ink sm:text-4xl">
-          History
-        </h1>
-        <p className="mt-2 text-sm text-muted">
-          Closed months stay locked unless an admin records a change note.
-        </p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <a
+            href="/export/months"
+            className="flex h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-4 text-sm font-semibold text-ink shadow-sm transition hover:bg-background"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" />
+            Monthly CSV
+          </a>
+          <a
+            href="/export/entries"
+            className="flex h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-4 text-sm font-semibold text-ink shadow-sm transition hover:bg-background"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" />
+            Daily entries CSV
+          </a>
+        </div>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-4">
@@ -175,7 +205,7 @@ export default async function HistoryPage() {
 
       <section className="rounded-lg border border-line bg-panel shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] border-collapse text-sm">
+          <table className="w-full min-w-[980px] border-collapse text-sm">
             <thead className="bg-background text-left text-xs uppercase tracking-[0.08em] text-muted">
               <tr>
                 <th className="px-5 py-3 font-semibold">Month</th>
@@ -185,12 +215,15 @@ export default async function HistoryPage() {
                 <th className="px-5 py-3 text-right font-semibold">
                   Variance
                 </th>
+                <th className="px-5 py-3 text-right font-semibold">
+                  S1P vs internal
+                </th>
                 <th className="px-5 py-3 font-semibold">Drive for Nine</th>
                 <th className="px-5 py-3 font-semibold">Lock</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ drive, goal, summary }) => {
+              {rows.map(({ drive, goal, officialDrift, summary }) => {
                 const variance = summary.actual - goal.s1pGoal;
 
                 return (
@@ -213,6 +246,16 @@ export default async function HistoryPage() {
                       }`}
                     >
                       {summary.actual ? money(variance) : "-"}
+                    </td>
+                    <td
+                      className="px-5 py-3 text-right font-mono text-muted"
+                      title="Official S1P actual minus internally tracked production"
+                    >
+                      {officialDrift === undefined
+                        ? "-"
+                        : `${officialDrift >= 0 ? "+" : "-"}${money(
+                            Math.abs(officialDrift),
+                          )}`}
                     </td>
                     <td className="px-5 py-3">
                       {drive.active ? (

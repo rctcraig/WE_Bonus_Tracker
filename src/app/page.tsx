@@ -8,11 +8,17 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { MetricCard } from "@/components/metric-card";
+import {
+  MonthPaceChart,
+  type MonthPacePoint,
+} from "@/components/month-pace-chart";
 import { ProgressBar } from "@/components/progress-bar";
 import { StatusBadge } from "@/components/status-badge";
 import { TierLadder } from "@/components/tier-ladder";
 import {
+  adjustedProduction,
   compactDate,
+  expectedForScheduleDay,
   fullDate,
   getDriveForNineCampaignFromData,
   getMonthGoalFromData,
@@ -168,6 +174,45 @@ function getQuarterRallyWindow({
   );
 }
 
+// Day-by-day cumulative series for the pace chart: scheduled capacity walks
+// the plan, actuals walk the entered days (union of both date sets, so an
+// unscheduled entered day still appears).
+function buildPacePoints(
+  plan: MonthPlan | undefined,
+  monthEntries: ProductionEntry[],
+): MonthPacePoint[] {
+  const scheduleByDate = new Map(
+    (plan?.scheduledDays ?? []).map((day) => [day.date, day]),
+  );
+  const entryByDate = new Map(monthEntries.map((entry) => [entry.date, entry]));
+  const dates = [
+    ...new Set([...scheduleByDate.keys(), ...entryByDate.keys()]),
+  ].sort();
+  const lastEntryDate = monthEntries.at(-1)?.date;
+  let expected = 0;
+  let actual = 0;
+
+  return dates.map((date) => {
+    const day = scheduleByDate.get(date);
+
+    if (day && plan) {
+      expected += expectedForScheduleDay(day, plan);
+    }
+
+    const entry = entryByDate.get(date);
+
+    if (entry) {
+      actual += adjustedProduction(entry);
+    }
+
+    return {
+      date,
+      expected,
+      actual: lastEntryDate && date <= lastEntryDate ? actual : undefined,
+    };
+  });
+}
+
 export default async function Home() {
   await requireCurrentProfile();
   const data = await getPracticeData();
@@ -249,6 +294,8 @@ export default async function Home() {
     plans: data.monthPlans,
     quarter: currentQuarter,
   });
+  // bonusTiers arrive ordered by threshold ascending from the data layer.
+  const lowestTier = data.bonusTiers[0];
   const nextQuarterTier = currentQuarterProjection.nextProjectedTier;
   const nextQuarterTierTarget = nextQuarterTier
     ? currentQuarterProjection.goal * (nextQuarterTier.thresholdPct / 100)
@@ -277,6 +324,7 @@ export default async function Home() {
       : currentQuarter.profitabilityStatus === "unfavorable"
         ? "profitability unfavorable"
         : "profitability pending";
+  const pacePoints = buildPacePoints(currentMonthPlan, monthEntries);
   const scheduleChangeDays = (currentMonthPlan?.scheduledDays ?? []).filter(
     (day) => day.changeReason,
   );
@@ -481,7 +529,9 @@ export default async function Home() {
                 ? `${money(
                     currentQuarterProjection.projectedTier.amount,
                   )} estimated staff bonus`
-                : "Build toward the 97% threshold"}
+                : lowestTier
+                  ? `Build toward the ${lowestTier.thresholdPct.toFixed(0)}% threshold`
+                  : "No bonus tiers configured yet"}
             </p>
             <p className="mt-1 text-sm text-muted">
               Projected {currentQuarter.label}:{" "}
@@ -521,8 +571,8 @@ export default async function Home() {
                 </p>
               ) : (
                 <p className="mt-2 text-sm text-muted">
-                  Uses the entered remaining Q2 schedule and will update when
-                  setup changes.
+                  Uses the entered remaining {currentQuarter.label} schedule
+                  and will update when setup changes.
                 </p>
               )}
             </div>
@@ -552,6 +602,45 @@ export default async function Home() {
           </div>
         </div>
       </section>
+
+      {pacePoints.length > 0 ? (
+        <section className="rounded-lg border border-line bg-panel p-5 shadow-sm">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-ink">
+                {monthGoal.label} daily pace
+              </h2>
+              <p className="text-sm text-muted">
+                Cumulative adjusted production against the scheduled doctor-day
+                pace and the S1P goal.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-xs font-semibold">
+              <span className="inline-flex items-center gap-1 text-accent">
+                <span className="h-2 w-5 rounded-full bg-accent" />
+                Actual
+              </span>
+              <span className="inline-flex items-center gap-1 text-muted">
+                <span className="h-2 w-5 rounded-full bg-[#c8c1b5]" />
+                Scheduled pace
+              </span>
+              <span className="inline-flex items-center gap-1 text-ink">
+                <span className="h-0.5 w-5 bg-ink" />
+                Goal {money(monthGoal.s1pGoal)}
+              </span>
+            </div>
+          </div>
+          <div className="mt-6">
+            <MonthPaceChart goal={monthGoal.s1pGoal} points={pacePoints} />
+          </div>
+          {monthEntries.length === 0 ? (
+            <p className="mt-3 text-sm text-muted">
+              No production entered yet for {monthGoal.label}; the teal actual
+              line appears with the first saved day.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="rounded-lg border border-line bg-panel shadow-sm">
         <div className="flex flex-col gap-2 border-b border-line p-5 sm:flex-row sm:items-center sm:justify-between">

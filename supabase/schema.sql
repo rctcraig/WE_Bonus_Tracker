@@ -231,6 +231,22 @@ as $$
   select current_user_role() = 'admin'
 $$;
 
+create or replace function is_month_open(p_practice_id uuid, p_date date)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1
+    from monthly_goals g
+    where g.practice_id = p_practice_id
+      and g.month = date_trunc('month', p_date)::date
+      and not g.closed
+  )
+$$;
+
 create policy "Users can read their practice"
 on practices for select
 using (id = current_user_practice_id());
@@ -248,10 +264,20 @@ create policy "Practice data is readable inside practice"
 on monthly_goals for select
 using (practice_id = current_user_practice_id());
 
+-- Closed months are frozen for user sessions; the app's service-role server
+-- actions handle close/reopen so those transitions stay audited.
 create policy "Managers maintain open monthly goals"
 on monthly_goals for all
-using (can_manage() and practice_id = current_user_practice_id())
-with check (can_manage() and practice_id = current_user_practice_id());
+using (
+  can_manage()
+  and practice_id = current_user_practice_id()
+  and not closed
+)
+with check (
+  can_manage()
+  and practice_id = current_user_practice_id()
+  and not closed
+);
 
 create policy "Practice plans readable inside practice"
 on month_plans for select
@@ -259,8 +285,16 @@ using (practice_id = current_user_practice_id());
 
 create policy "Managers maintain plans"
 on month_plans for all
-using (can_manage() and practice_id = current_user_practice_id())
-with check (can_manage() and practice_id = current_user_practice_id());
+using (
+  can_manage()
+  and practice_id = current_user_practice_id()
+  and is_month_open(practice_id, month)
+)
+with check (
+  can_manage()
+  and practice_id = current_user_practice_id()
+  and is_month_open(practice_id, month)
+);
 
 create policy "Schedule days readable through own practice"
 on schedule_days for select
@@ -282,6 +316,7 @@ using (
     from month_plans mp
     where mp.id = schedule_days.month_plan_id
       and mp.practice_id = current_user_practice_id()
+      and is_month_open(mp.practice_id, mp.month)
   )
 )
 with check (
@@ -291,6 +326,7 @@ with check (
     from month_plans mp
     where mp.id = schedule_days.month_plan_id
       and mp.practice_id = current_user_practice_id()
+      and is_month_open(mp.practice_id, mp.month)
   )
 );
 
@@ -300,8 +336,16 @@ using (practice_id = current_user_practice_id());
 
 create policy "Managers maintain production"
 on production_entries for all
-using (can_manage() and practice_id = current_user_practice_id())
-with check (can_manage() and practice_id = current_user_practice_id());
+using (
+  can_manage()
+  and practice_id = current_user_practice_id()
+  and is_month_open(practice_id, work_date)
+)
+with check (
+  can_manage()
+  and practice_id = current_user_practice_id()
+  and is_month_open(practice_id, work_date)
+);
 
 create policy "Bonus tiers readable inside practice"
 on bonus_tiers for select

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { logAuditEvent } from "@/lib/audit";
 import { getCurrentProfile } from "@/lib/auth";
 import { canEditProduction } from "@/lib/roles";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -114,12 +115,68 @@ export async function saveProductionEntries(entries: ProductionEntry[]) {
     entered_by: currentProfile.userId,
   }));
 
+  // Snapshot the rows being replaced so the audit trail records what the
+  // numbers were before this save, not just what they became.
+  const { data: beforeRows } = await supabase
+    .from("production_entries")
+    .select("work_date,total_production,credit_adjustments,note")
+    .eq("practice_id", currentProfile.practiceId)
+    .in("work_date", dates);
+
   const { error } = await supabase
     .from("production_entries")
     .upsert(rows, { onConflict: "practice_id,work_date" });
 
   if (error) {
     return { ok: false, message: error.message };
+  }
+
+  const beforeByDate = new Map(
+    (beforeRows ?? []).map((row) => [
+      String(row.work_date),
+      {
+        total_production: Number(row.total_production),
+        credit_adjustments: Number(row.credit_adjustments),
+        note: row.note,
+      },
+    ]),
+  );
+  // Only audit rows that actually changed; the client resends every visible
+  // row on save, and logging untouched days would drown the trail in noise.
+  const changedRows = rows.filter((row) => {
+    const before = beforeByDate.get(row.work_date);
+
+    return (
+      !before ||
+      before.total_production !== row.total_production ||
+      before.credit_adjustments !== row.credit_adjustments ||
+      (before.note ?? null) !== row.note
+    );
+  });
+
+  if (changedRows.length > 0) {
+    await logAuditEvent({
+      practiceId: currentProfile.practiceId,
+      actorUserId: currentProfile.userId,
+      eventType: "production_entries_saved",
+      tableName: "production_entries",
+      beforeData: Object.fromEntries(
+        changedRows.map((row) => [
+          row.work_date,
+          beforeByDate.get(row.work_date) ?? null,
+        ]),
+      ),
+      afterData: Object.fromEntries(
+        changedRows.map((row) => [
+          row.work_date,
+          {
+            total_production: row.total_production,
+            credit_adjustments: row.credit_adjustments,
+            note: row.note,
+          },
+        ]),
+      ),
+    });
   }
 
   revalidatePath("/");
@@ -154,6 +211,21 @@ export async function deleteProductionEntry(date: string) {
     return monthCheck;
   }
 
+  const { data: existing, error: existingError } = await supabase
+    .from("production_entries")
+    .select("id,total_production,credit_adjustments,note")
+    .eq("practice_id", currentProfile.practiceId)
+    .eq("work_date", date)
+    .maybeSingle();
+
+  if (existingError) {
+    return { ok: false, message: existingError.message };
+  }
+
+  if (!existing) {
+    return { ok: false, message: `No saved entry exists for ${date}.` };
+  }
+
   const { error } = await supabase
     .from("production_entries")
     .delete()
@@ -163,6 +235,20 @@ export async function deleteProductionEntry(date: string) {
   if (error) {
     return { ok: false, message: error.message };
   }
+
+  await logAuditEvent({
+    practiceId: currentProfile.practiceId,
+    actorUserId: currentProfile.userId,
+    eventType: "production_entry_deleted",
+    tableName: "production_entries",
+    recordId: existing.id,
+    beforeData: {
+      work_date: date,
+      total_production: Number(existing.total_production),
+      credit_adjustments: Number(existing.credit_adjustments),
+      note: existing.note,
+    },
+  });
 
   revalidatePath("/");
   revalidatePath("/entry");
