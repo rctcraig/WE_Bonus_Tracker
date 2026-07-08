@@ -136,10 +136,12 @@ export default async function InsightsPage() {
   const ytdForecastPct = ytdGoal > 0 ? (ytdForecast / ytdGoal) * 100 : 0;
   const ytdVariance = ytdActual - ytdGoal;
   const forecastVariance = ytdForecast - ytdGoal;
-  const maxMonthly = Math.max(
-    1,
-    ...rows.flatMap((row) => [row.goal, row.actual, row.forecast]),
-  );
+  // Headroom keeps the top month's goal marker inside the overflow-clipped bar track.
+  const maxMonthly =
+    Math.max(
+      1,
+      ...rows.flatMap((row) => [row.goal, row.actual, row.forecast]),
+    ) * 1.05;
   const maxCumulative = Math.max(ytdGoal, ytdForecast, ytdActual, 1) * 1.08;
   const goalPoints = cumulativePoints(rows, maxCumulative, "goal");
   const forecastPoints = cumulativePoints(rows, maxCumulative, "forecast");
