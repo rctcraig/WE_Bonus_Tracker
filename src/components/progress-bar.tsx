@@ -7,8 +7,12 @@ type ProgressBarProps = {
 export function ProgressBar({ value, marker, label }: ProgressBarProps) {
   const boundedValue = Math.max(0, Math.min(value, 130));
   const width = `${Math.min(boundedValue, 100)}%`;
+  // Cap at the track edge minus the marker's own width: the track clips
+  // overflow, so a marker at exactly 100% would render outside and vanish.
   const markerLeft =
-    marker === undefined ? undefined : `${Math.max(0, Math.min(marker, 130))}%`;
+    marker === undefined
+      ? undefined
+      : `min(${Math.max(0, marker)}%, calc(100% - 2px))`;
 
   return (
     <div>

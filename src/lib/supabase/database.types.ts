@@ -223,6 +223,48 @@ export type Database = {
         >;
         Relationships: [];
       };
+      notification_settings: {
+        Row: {
+          practice_id: string;
+          missing_entry_reminder_time: string;
+          monday_summary_time: string;
+          notify_staff: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          practice_id: string;
+          missing_entry_reminder_time?: string;
+          monday_summary_time?: string;
+          notify_staff?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["notification_settings"]["Insert"]
+        >;
+        Relationships: [];
+      };
+      push_subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          endpoint: string;
+          subscription: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          endpoint: string;
+          subscription: Json;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["push_subscriptions"]["Insert"]
+        >;
+        Relationships: [];
+      };
       audit_events: {
         Row: {
           id: string;

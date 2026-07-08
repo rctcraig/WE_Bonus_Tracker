@@ -9,6 +9,7 @@ import {
   Trash2,
   UserMinus,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { saveMonthSetup } from "@/app/setup/actions";
 import { MetricCard } from "@/components/metric-card";
@@ -63,6 +64,14 @@ function monthLabel(month: string) {
   }).format(new Date(`${month}-01T12:00:00`));
 }
 
+function nextMonthAfter(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+
+  return monthNumber === 12
+    ? `${year + 1}-01`
+    : `${year}-${String(monthNumber + 1).padStart(2, "0")}`;
+}
+
 function newRow(date: string, dayType: DayType, doctors: number) {
   return {
     id: crypto.randomUUID(),
@@ -88,7 +97,9 @@ function draftForMonth(
 
   return {
     month,
-    s1pGoal: Math.round(goal?.s1pGoal ?? 0),
+    // Keep cents: rounding here would silently rewrite a $1,108,492.51 goal
+    // to $1,108,493.00 on the next save.
+    s1pGoal: goal?.s1pGoal ?? 0,
     avgMthDoctorDay:
       plan?.avgMthDoctorDay ??
       recommendation.mthAverage ??
@@ -194,6 +205,7 @@ export function SetupClient({
   plans,
   productionEntries,
 }: SetupClientProps) {
+  const router = useRouter();
   const initialRecommendation = averageRecommendationForMonth(
     initialMonth,
     plans,
@@ -214,10 +226,16 @@ export function SetupClient({
     [draft.month, plans, productionEntries],
   );
 
+  // Include the draft month so a brand-new month (not yet saved) still shows
+  // in the selector while it is being built.
   const monthOptions = useMemo(
-    () => goals.map((goal) => goal.month).sort(),
-    [goals],
+    () => [...new Set([...goals.map((goal) => goal.month), draft.month])].sort(),
+    [goals, draft.month],
   );
+  const nextMonth = nextMonthAfter(monthOptions.at(-1) ?? draft.month);
+  const selectedGoal = goals.find((goal) => goal.month === draft.month);
+  const selectedMonthClosed = selectedGoal?.closed ?? false;
+  const canEditSelectedMonth = canEditSetup && !selectedMonthClosed;
   const sortedDays = useMemo(
     () => [...draft.scheduleDays].sort((a, b) => a.date.localeCompare(b.date)),
     [draft.scheduleDays],
@@ -363,6 +381,12 @@ export function SetupClient({
       });
 
       setStatus(result);
+
+      if (result.ok) {
+        // Pull fresh goals/plans so a newly created month shows up in the
+        // selector and closed states stay current.
+        router.refresh();
+      }
     });
   }
 
@@ -372,8 +396,12 @@ export function SetupClient({
         <div>
           <div className="mb-3 flex flex-wrap gap-2">
             <StatusBadge tone="neutral">{monthLabel(draft.month)}</StatusBadge>
-            <StatusBadge tone={canEditSetup ? "good" : "neutral"}>
-              {canEditSetup ? "Editable" : "View only"}
+            <StatusBadge tone={canEditSelectedMonth ? "good" : "neutral"}>
+              {selectedMonthClosed
+                ? "Closed - view only"
+                : canEditSetup
+                  ? "Editable"
+                  : "View only"}
             </StatusBadge>
             <StatusBadge tone={dateCountMatches ? "good" : "warning"}>
               {sortedDays.length} of {draft.plannedWorkdayCount} dates
@@ -406,6 +434,16 @@ export function SetupClient({
             ))}
           </select>
           {canEditSetup ? (
+            <button
+              type="button"
+              onClick={() => selectMonth(nextMonth)}
+              className="flex h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-4 text-sm font-semibold text-ink shadow-sm transition hover:bg-background"
+            >
+              <CalendarPlus className="h-4 w-4" aria-hidden="true" />
+              Add {monthLabel(nextMonth)}
+            </button>
+          ) : null}
+          {canEditSelectedMonth ? (
             <button
               type="button"
               onClick={saveSetup}
@@ -479,8 +517,9 @@ export function SetupClient({
               <input
                 type="number"
                 min="0"
+                step="0.01"
                 value={draft.s1pGoal}
-                disabled={!canEditSetup}
+                disabled={!canEditSelectedMonth}
                 onChange={(event) => updateDraft("s1pGoal", event.target.value)}
                 className="mt-2 h-11 w-full rounded-lg border border-line bg-white px-3 text-right font-mono text-ink disabled:bg-background disabled:text-muted"
               />
@@ -491,7 +530,7 @@ export function SetupClient({
                 type="number"
                 min="0"
                 value={draft.plannedWorkdayCount}
-                disabled={!canEditSetup}
+                disabled={!canEditSelectedMonth}
                 onChange={(event) =>
                   updateDraft("plannedWorkdayCount", event.target.value)
                 }
@@ -505,7 +544,7 @@ export function SetupClient({
                   type="number"
                   min="0"
                   value={draft.avgMthDoctorDay}
-                  disabled={!canEditSetup}
+                  disabled={!canEditSelectedMonth}
                   onChange={(event) =>
                     updateDraft("avgMthDoctorDay", event.target.value)
                   }
@@ -523,7 +562,8 @@ export function SetupClient({
                 <button
                   type="button"
                   disabled={
-                    !canEditSetup || recommendation.mthAverage === undefined
+                    !canEditSelectedMonth ||
+                    recommendation.mthAverage === undefined
                   }
                   onClick={() => applyCalculatedAverage("avgMthDoctorDay")}
                   className="shrink-0 text-xs font-semibold text-ink underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:text-muted disabled:no-underline"
@@ -539,7 +579,7 @@ export function SetupClient({
                   type="number"
                   min="0"
                   value={draft.avgFridayDoctorDay}
-                  disabled={!canEditSetup}
+                  disabled={!canEditSelectedMonth}
                   onChange={(event) =>
                     updateDraft("avgFridayDoctorDay", event.target.value)
                   }
@@ -557,7 +597,8 @@ export function SetupClient({
                 <button
                   type="button"
                   disabled={
-                    !canEditSetup || recommendation.fridayAverage === undefined
+                    !canEditSelectedMonth ||
+                    recommendation.fridayAverage === undefined
                   }
                   onClick={() => applyCalculatedAverage("avgFridayDoctorDay")}
                   className="shrink-0 text-xs font-semibold text-ink underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:text-muted disabled:no-underline"
@@ -581,7 +622,7 @@ export function SetupClient({
                 type="number"
                 min="0"
                 value={defaultMthDoctors}
-                disabled={!canEditSetup}
+                disabled={!canEditSelectedMonth}
                 onChange={(event) =>
                   setDefaultMthDoctors(Number(event.target.value))
                 }
@@ -594,7 +635,7 @@ export function SetupClient({
                 type="number"
                 min="0"
                 value={defaultFridayDoctors}
-                disabled={!canEditSetup}
+                disabled={!canEditSelectedMonth}
                 onChange={(event) =>
                   setDefaultFridayDoctors(Number(event.target.value))
                 }
@@ -604,7 +645,7 @@ export function SetupClient({
             <div className="flex items-end">
               <button
                 type="button"
-                disabled={!canEditSetup}
+                disabled={!canEditSelectedMonth}
                 onClick={generateWeekdays}
                 className="flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-line bg-panel px-4 text-sm font-semibold text-ink shadow-sm transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -624,7 +665,7 @@ export function SetupClient({
               Original and current doctor counts are both retained.
             </p>
           </div>
-          {canEditSetup ? (
+          {canEditSelectedMonth ? (
             <button
               type="button"
               onClick={addScheduleDay}
@@ -666,7 +707,7 @@ export function SetupClient({
                       <input
                         type="date"
                         value={day.date}
-                        disabled={!canEditSetup}
+                        disabled={!canEditSelectedMonth}
                         onChange={(event) =>
                           updateDay(day.id, "date", event.target.value)
                         }
@@ -679,7 +720,7 @@ export function SetupClient({
                     <td className="px-5 py-3">
                       <select
                         value={day.dayType}
-                        disabled={!canEditSetup}
+                        disabled={!canEditSelectedMonth}
                         onChange={(event) =>
                           updateDay(day.id, "dayType", event.target.value)
                         }
@@ -694,7 +735,7 @@ export function SetupClient({
                         type="number"
                         min="0"
                         value={day.originalDoctors}
-                        disabled={!canEditSetup}
+                        disabled={!canEditSelectedMonth}
                         onChange={(event) =>
                           updateDay(
                             day.id,
@@ -710,7 +751,7 @@ export function SetupClient({
                         type="number"
                         min="0"
                         value={day.doctors}
-                        disabled={!canEditSetup}
+                        disabled={!canEditSelectedMonth}
                         onChange={(event) =>
                           updateDay(day.id, "doctors", event.target.value)
                         }
@@ -724,7 +765,7 @@ export function SetupClient({
                       <input
                         type="text"
                         value={day.changeReason}
-                        disabled={!canEditSetup}
+                        disabled={!canEditSelectedMonth}
                         placeholder={changed ? "Doctor out" : "On plan"}
                         onChange={(event) =>
                           updateDay(
@@ -739,7 +780,7 @@ export function SetupClient({
                     <td className="px-5 py-3">
                       <button
                         type="button"
-                        disabled={!canEditSetup}
+                        disabled={!canEditSelectedMonth}
                         onClick={() => removeScheduleDay(day.id)}
                         className="flex h-10 w-10 items-center justify-center rounded-lg border border-line text-muted transition hover:bg-background hover:text-danger disabled:cursor-not-allowed disabled:opacity-40"
                         aria-label={`Remove ${day.date}`}

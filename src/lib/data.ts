@@ -90,7 +90,7 @@ function monthLabel(month: string) {
   );
 }
 
-function buildQuarters(goals: MonthlyGoal[]): Quarter[] {
+export function buildQuarters(goals: MonthlyGoal[]): Quarter[] {
   // Derive quarter buckets from whatever goal months exist instead of hardcoding
   // a single year, so the app keeps working as new years are added.
   const buckets = new Map<

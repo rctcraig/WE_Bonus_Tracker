@@ -131,6 +131,7 @@ export function summarizeMonth(
   return {
     actual,
     currentExpected,
+    entryTotal,
     expectedThroughEntries,
     forecast,
     goal,

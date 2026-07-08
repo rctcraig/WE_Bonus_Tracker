@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { logAuditEvent } from "@/lib/audit";
 import { getCurrentProfile } from "@/lib/auth";
 import { canEditProduction } from "@/lib/roles";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -106,7 +107,7 @@ export async function saveMonthSetup(input: SaveMonthSetupInput) {
 
   const { data: existingGoal, error: existingGoalError } = await supabase
     .from("monthly_goals")
-    .select("closed")
+    .select("s1p_goal,closed")
     .eq("practice_id", currentProfile.practiceId)
     .eq("month", monthDate)
     .maybeSingle();
@@ -121,6 +122,26 @@ export async function saveMonthSetup(input: SaveMonthSetupInput) {
       message: `${input.month} is closed and can no longer be edited.`,
     };
   }
+
+  // Capture the pre-save plan so the audit event can show what changed; the
+  // S1P goal drives the bonus, so its history matters.
+  const { data: existingPlan } = await supabase
+    .from("month_plans")
+    .select("id,avg_mth_doctor_day,avg_friday_doctor_day,planned_workday_count")
+    .eq("practice_id", currentProfile.practiceId)
+    .eq("month", monthDate)
+    .maybeSingle();
+  let beforeScheduleDayCount = 0;
+
+  if (existingPlan) {
+    const { count } = await supabase
+      .from("schedule_days")
+      .select("id", { count: "exact", head: true })
+      .eq("month_plan_id", existingPlan.id);
+
+    beforeScheduleDayCount = count ?? 0;
+  }
+
   const { error: goalError } = await supabase.from("monthly_goals").upsert(
     {
       practice_id: currentProfile.practiceId,
@@ -195,6 +216,35 @@ export async function saveMonthSetup(input: SaveMonthSetupInput) {
   if (pruneError) {
     return { ok: false, message: pruneError.message };
   }
+
+  await logAuditEvent({
+    practiceId: currentProfile.practiceId,
+    actorUserId: currentProfile.userId,
+    eventType: existingGoal ? "month_setup_saved" : "month_setup_created",
+    tableName: "monthly_goals",
+    beforeData: existingGoal
+      ? {
+          month: input.month,
+          s1p_goal: Number(existingGoal.s1p_goal),
+          avg_mth_doctor_day: existingPlan
+            ? Number(existingPlan.avg_mth_doctor_day)
+            : null,
+          avg_friday_doctor_day: existingPlan
+            ? Number(existingPlan.avg_friday_doctor_day)
+            : null,
+          planned_workday_count: existingPlan?.planned_workday_count ?? null,
+          schedule_day_count: beforeScheduleDayCount,
+        }
+      : undefined,
+    afterData: {
+      month: input.month,
+      s1p_goal: toCents(input.s1pGoal),
+      avg_mth_doctor_day: toCents(input.avgMthDoctorDay),
+      avg_friday_doctor_day: toCents(input.avgFridayDoctorDay),
+      planned_workday_count: Math.max(Math.round(input.plannedWorkdayCount), 0),
+      schedule_day_count: scheduleDays.length,
+    },
+  });
 
   revalidatePath("/");
   revalidatePath("/setup");

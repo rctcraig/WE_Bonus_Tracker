@@ -1,5 +1,6 @@
-import { KeyRound, UserCircle } from "lucide-react";
+import { Bell, KeyRound, UserCircle } from "lucide-react";
 import { ChangePasswordForm } from "@/app/account/change-password-form";
+import { PushToggle } from "@/components/push-toggle";
 import { StatusBadge } from "@/components/status-badge";
 import { requireCurrentProfile } from "@/lib/auth";
 import { roleLabels } from "@/lib/roles";
@@ -71,6 +72,22 @@ export default async function AccountPage() {
           </div>
           <ChangePasswordForm />
         </div>
+      </section>
+
+      <section className="rounded-lg border border-line bg-panel p-5 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-background text-muted">
+            <Bell className="h-5 w-5" aria-hidden="true" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-ink">Notifications</h2>
+            <p className="mt-1 text-sm text-muted">
+              Get a reminder when no production has been entered by midday, and
+              a Monday morning summary of where the month stands.
+            </p>
+          </div>
+        </div>
+        <PushToggle />
       </section>
     </main>
   );

@@ -1,4 +1,4 @@
-import { MailPlus, ShieldCheck, Users } from "lucide-react";
+import { MailPlus, ScrollText, ShieldCheck, Users } from "lucide-react";
 import { redirect } from "next/navigation";
 import { InviteForm } from "@/app/admin/invite-form";
 import { SendSetupLinkButton } from "@/app/admin/send-setup-link-button";
@@ -25,6 +25,68 @@ type PracticeUser = ProfileRow & {
   lastSignInAt: string | null;
 };
 
+type AuditEventRow = {
+  id: string;
+  created_at: string;
+  actor_user_id: string | null;
+  event_type: string;
+  table_name: string;
+  reason: string | null;
+  before_data: Record<string, unknown> | null;
+  after_data: Record<string, unknown> | null;
+};
+
+const auditEventLabels: Record<string, string> = {
+  month_closed: "Month closed",
+  month_reopened: "Month reopened",
+  month_setup_created: "Month setup created",
+  month_setup_saved: "Month setup saved",
+  production_entries_saved: "Production saved",
+  production_entry_deleted: "Production deleted",
+  profitability_status_set: "Profitability set",
+  drive_for_nine_created: "Drive for Nine created",
+  drive_for_nine_updated: "Drive for Nine updated",
+};
+
+function auditEventLabel(eventType: string) {
+  return auditEventLabels[eventType] ?? eventType.replaceAll("_", " ");
+}
+
+function auditEventDetail(event: AuditEventRow) {
+  const payload = event.after_data ?? event.before_data;
+  const parts: string[] = [];
+
+  if (payload && !Array.isArray(payload)) {
+    if (typeof payload.month === "string") {
+      parts.push(payload.month);
+    } else if (typeof payload.work_date === "string") {
+      parts.push(payload.work_date);
+    } else if (event.table_name === "production_entries") {
+      const dates = Object.keys(payload);
+
+      if (dates.length === 1) {
+        parts.push(dates[0]);
+      } else if (dates.length > 1) {
+        parts.push(`${dates.length} days`);
+      }
+    }
+  }
+
+  if (event.reason) {
+    parts.push(event.reason);
+  }
+
+  return parts.join(" - ");
+}
+
+const auditTimestamp = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/Chicago",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
 export default async function AdminPage() {
   const currentProfile = await requireCurrentProfile();
 
@@ -42,8 +104,20 @@ export default async function AdminPage() {
     .order("full_name", { ascending: true });
   const { data: authUsersData, error: authUsersError } =
     await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  const { data: auditData } = await admin
+    .from("audit_events")
+    .select(
+      "id,created_at,actor_user_id,event_type,table_name,reason,before_data,after_data",
+    )
+    .eq("practice_id", currentProfile.practiceId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  const auditEvents = (auditData ?? []) as AuditEventRow[];
 
   const profiles = (data ?? []) as ProfileRow[];
+  const nameByUserId = new Map(
+    profiles.map((profile) => [profile.user_id, profile.full_name]),
+  );
   const authUsersById = new Map(
     (authUsersData?.users ?? []).map((user) => [user.id, user]),
   );
@@ -181,6 +255,61 @@ export default async function AdminPage() {
                 <tr className="border-t border-line">
                   <td className="px-5 py-8 text-muted" colSpan={6}>
                     No profiles found yet.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-line bg-panel shadow-sm">
+        <div className="flex items-start justify-between gap-4 border-b border-line p-5">
+          <div>
+            <h2 className="text-lg font-semibold text-ink">Change log</h2>
+            <p className="text-sm text-muted">
+              The most recent 50 tracked changes: goals, production, month
+              close-outs, and campaigns.
+            </p>
+          </div>
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-background text-muted">
+            <ScrollText className="h-5 w-5" aria-hidden="true" />
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] border-collapse text-sm">
+            <thead className="bg-background text-left text-xs uppercase tracking-[0.08em] text-muted">
+              <tr>
+                <th className="px-5 py-3 font-semibold">When</th>
+                <th className="px-5 py-3 font-semibold">Who</th>
+                <th className="px-5 py-3 font-semibold">Event</th>
+                <th className="px-5 py-3 font-semibold">Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {auditEvents.map((event) => (
+                <tr key={event.id} className="border-t border-line">
+                  <td className="whitespace-nowrap px-5 py-3 text-muted">
+                    {auditTimestamp.format(new Date(event.created_at))}
+                  </td>
+                  <td className="px-5 py-3 font-medium text-ink">
+                    {event.actor_user_id
+                      ? (nameByUserId.get(event.actor_user_id) ?? "Former user")
+                      : "System"}
+                  </td>
+                  <td className="px-5 py-3 text-ink">
+                    {auditEventLabel(event.event_type)}
+                  </td>
+                  <td className="px-5 py-3 text-muted">
+                    {auditEventDetail(event) || "-"}
+                  </td>
+                </tr>
+              ))}
+              {!auditEvents.length ? (
+                <tr className="border-t border-line">
+                  <td className="px-5 py-8 text-muted" colSpan={4}>
+                    No tracked changes yet. Saves, close-outs, and reopenings
+                    will appear here.
                   </td>
                 </tr>
               ) : null}

@@ -66,6 +66,45 @@ Roles:
 Admins and office managers can resend expired setup links from the Admin user
 table. Signed-in users can change their own password from Account.
 
+## Push Notifications
+
+The app can send a midday "no production entered yet" reminder on workdays and
+a Monday morning month-status summary. Without the env vars below the app runs
+normally and the Account page explains that notifications are not configured.
+
+1. Generate a VAPID key pair once:
+
+   ```bash
+   npx web-push generate-vapid-keys
+   ```
+
+2. Add to the environment (Vercel project settings and `.env.local`):
+
+   ```bash
+   NEXT_PUBLIC_VAPID_PUBLIC_KEY=   # public key from step 1
+   VAPID_PRIVATE_KEY=              # private key from step 1
+   VAPID_SUBJECT=mailto:you@example.com
+   CRON_SECRET=                    # any long random string
+   ```
+
+3. Deploy. `vercel.json` schedules `/api/cron/notifications` hourly; Vercel
+   automatically sends `Authorization: Bearer $CRON_SECRET` to cron routes.
+   Each run compares the practice's `notification_settings` times (defaults:
+   reminder at 12:00, Monday summary at 08:00, both America/Chicago) against
+   the current hour, so daylight saving needs no cron changes.
+
+4. Each user enables notifications per device from Account > Notifications
+   (on iPhone/iPad the app must be added to the Home Screen first) and can
+   send themselves a test notification from the same card.
+
+Recipients are practice users with `notifications_enabled` on their profile;
+staff are excluded unless `notification_settings.notify_staff` is true.
+
+## CSV Exports
+
+The History page offers `Monthly CSV` (goals, actuals, official S1P numbers)
+and `Daily entries CSV` (per-day production) downloads for reconciliation.
+
 ## Verification
 
 ```bash
